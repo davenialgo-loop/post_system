@@ -74,6 +74,7 @@ BUTTON_STYLES = {
         'fg': COLORS['text_white'],
         'activebackground': COLORS['primary_hover'],
         'activeforeground': COLORS['text_white'],
+        'disabledforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body'], FONTS['bold']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -85,6 +86,7 @@ BUTTON_STYLES = {
         'fg': COLORS['text_white'],
         'activebackground': '#475569',
         'activeforeground': COLORS['text_white'],
+        'disabledforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -96,6 +98,7 @@ BUTTON_STYLES = {
         'fg': COLORS['text_white'],
         'activebackground': '#059669',
         'activeforeground': COLORS['text_white'],
+        'disabledforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body'], FONTS['bold']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -107,6 +110,7 @@ BUTTON_STYLES = {
         'fg': COLORS['text_white'],
         'activebackground': '#dc2626',
         'activeforeground': COLORS['text_white'],
+        'disabledforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -134,7 +138,7 @@ PATHS = {
 
 # ============= CONFIGURACIÓN DE NEGOCIO =============
 BUSINESS = {
-    'name': 'Mi Negocio POS',
+    'name': 'Venialgo Sistemas',
     'currency': '$',
     'tax_rate': 0.10,  # 10% impuesto
     'decimal_places': 2,

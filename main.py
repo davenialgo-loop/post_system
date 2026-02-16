@@ -11,7 +11,7 @@ from database.db_manager import DatabaseManager
 class POSApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sistema POS Profesional")
+        self.root.title("Venialgo Sistemas - POS Profesional")
         self.root.geometry(f"{WINDOW['main_width']}x{WINDOW['main_height']}")
         self.root.minsize(WINDOW['min_width'], WINDOW['min_height'])
         
@@ -62,7 +62,7 @@ class POSApp:
         # Logo/Título
         title_label = tk.Label(
             header,
-            text="🏪 SISTEMA POS",
+            text="🏪 VENIALGO SISTEMAS",
             font=(FONTS['family'], FONTS['title'], 'bold'),
             bg=COLORS['bg_card'],
             fg=COLORS['primary']
@@ -72,7 +72,7 @@ class POSApp:
         # Información de sesión
         info_label = tk.Label(
             header,
-            text="Sistema de Punto de Venta v1.0",
+            text="Sistema de Punto de Venta Profesional",
             font=(FONTS['family'], FONTS['small']),
             bg=COLORS['bg_card'],
             fg=COLORS['text_secondary']
