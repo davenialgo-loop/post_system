@@ -72,7 +72,8 @@ BUTTON_STYLES = {
     'primary': {
         'bg': COLORS['primary'],
         'fg': COLORS['text_white'],
-        'active_bg': COLORS['primary_hover'],
+        'activebackground': COLORS['primary_hover'],
+        'activeforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body'], FONTS['bold']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -82,7 +83,8 @@ BUTTON_STYLES = {
     'secondary': {
         'bg': COLORS['secondary'],
         'fg': COLORS['text_white'],
-        'active_bg': '#475569',
+        'activebackground': '#475569',
+        'activeforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -92,7 +94,8 @@ BUTTON_STYLES = {
     'success': {
         'bg': COLORS['success'],
         'fg': COLORS['text_white'],
-        'active_bg': '#059669',
+        'activebackground': '#059669',
+        'activeforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body'], FONTS['bold']),
         'relief': 'flat',
         'cursor': 'hand2',
@@ -102,7 +105,8 @@ BUTTON_STYLES = {
     'danger': {
         'bg': COLORS['danger'],
         'fg': COLORS['text_white'],
-        'active_bg': '#dc2626',
+        'activebackground': '#dc2626',
+        'activeforeground': COLORS['text_white'],
         'font': (FONTS['family'], FONTS['body']),
         'relief': 'flat',
         'cursor': 'hand2',
