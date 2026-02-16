@@ -76,6 +76,7 @@ class DatabaseManager:
                     amount_paid REAL,
                     change_amount REAL,
                     sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_credit BOOLEAN DEFAULT 0,
                     FOREIGN KEY (customer_id) REFERENCES customers (id)
                 )
             ''')
@@ -94,9 +95,44 @@ class DatabaseManager:
                 )
             ''')
             
+            # Tabla de ventas a crédito
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS credit_sales (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sale_id INTEGER NOT NULL UNIQUE,
+                    customer_id INTEGER NOT NULL,
+                    total_amount REAL NOT NULL,
+                    down_payment REAL DEFAULT 0,
+                    remaining_balance REAL NOT NULL,
+                    payment_frequency TEXT NOT NULL,
+                    installment_amount REAL NOT NULL,
+                    total_installments INTEGER NOT NULL,
+                    paid_installments INTEGER DEFAULT 0,
+                    next_payment_date DATE,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
+                    FOREIGN KEY (customer_id) REFERENCES customers (id)
+                )
+            ''')
+            
+            # Tabla de pagos realizados
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS credit_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    credit_sale_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT,
+                    FOREIGN KEY (credit_sale_id) REFERENCES credit_sales (id) ON DELETE CASCADE
+                )
+            ''')
+            
             # Índices para mejorar rendimiento
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_sale_date ON sales(sale_date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_product_name ON products(name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_credit_status ON credit_sales(status)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_next_payment ON credit_sales(next_payment_date)')
             
             conn.commit()
     
@@ -207,19 +243,20 @@ class DatabaseManager:
     
     # ============= MÉTODOS PARA VENTAS =============
     
-    def create_sale(self, customer_id, total, payment_method, amount_paid, change_amount, cart_items):
+    def create_sale(self, customer_id, total, payment_method, amount_paid, change_amount, cart_items, is_credit=False):
         """
         Crea una venta completa con sus detalles
         cart_items: lista de diccionarios con {product_id, quantity, unit_price, subtotal}
+        is_credit: indica si es venta a crédito
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
             # Insertar venta
             cursor.execute('''
-                INSERT INTO sales (customer_id, total, payment_method, amount_paid, change_amount)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (customer_id, total, payment_method, amount_paid, change_amount))
+                INSERT INTO sales (customer_id, total, payment_method, amount_paid, change_amount, is_credit)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (customer_id, total, payment_method, amount_paid, change_amount, is_credit))
             
             sale_id = cursor.lastrowid
             
@@ -231,13 +268,139 @@ class DatabaseManager:
                 ''', (sale_id, item['product_id'], item['quantity'], 
                       item['unit_price'], item['subtotal']))
                 
-                # Reducir stock
-                cursor.execute('''
-                    UPDATE products SET stock = stock - ? WHERE id = ?
-                ''', (item['quantity'], item['product_id']))
+                # Reducir stock solo si no es crédito o si ya pagó
+                if not is_credit or amount_paid > 0:
+                    cursor.execute('''
+                        UPDATE products SET stock = stock - ? WHERE id = ?
+                    ''', (item['quantity'], item['product_id']))
             
             conn.commit()
             return sale_id
+    
+    # ============= MÉTODOS PARA CRÉDITOS =============
+    
+    def create_credit_sale(self, sale_id, customer_id, total_amount, down_payment, 
+                          payment_frequency, installment_amount, total_installments, next_payment_date):
+        """Crea una venta a crédito"""
+        remaining_balance = total_amount - down_payment
+        query = '''
+            INSERT INTO credit_sales 
+            (sale_id, customer_id, total_amount, down_payment, remaining_balance,
+             payment_frequency, installment_amount, total_installments, next_payment_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        return self.execute_update(query, (
+            sale_id, customer_id, total_amount, down_payment, remaining_balance,
+            payment_frequency, installment_amount, total_installments, next_payment_date
+        ))
+    
+    def get_all_credit_sales(self, status=None):
+        """Obtiene todas las ventas a crédito, opcionalmente filtradas por estado"""
+        if status:
+            query = '''
+                SELECT cs.*, c.name as customer_name, c.phone
+                FROM credit_sales cs
+                JOIN customers c ON cs.customer_id = c.id
+                WHERE cs.status = ?
+                ORDER BY cs.next_payment_date ASC
+            '''
+            return self.execute_query(query, (status,))
+        else:
+            query = '''
+                SELECT cs.*, c.name as customer_name, c.phone
+                FROM credit_sales cs
+                JOIN customers c ON cs.customer_id = c.id
+                ORDER BY cs.next_payment_date ASC
+            '''
+            return self.execute_query(query)
+    
+    def get_credit_sale_by_id(self, credit_sale_id):
+        """Obtiene una venta a crédito específica"""
+        query = '''
+            SELECT cs.*, c.name as customer_name, c.phone, c.address
+            FROM credit_sales cs
+            JOIN customers c ON cs.customer_id = c.id
+            WHERE cs.id = ?
+        '''
+        result = self.execute_query(query, (credit_sale_id,))
+        return result[0] if result else None
+    
+    def add_credit_payment(self, credit_sale_id, amount, notes=''):
+        """Registra un pago a una venta a crédito"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Insertar pago
+            cursor.execute('''
+                INSERT INTO credit_payments (credit_sale_id, amount, notes)
+                VALUES (?, ?, ?)
+            ''', (credit_sale_id, amount, notes))
+            
+            # Obtener datos del crédito
+            cursor.execute('SELECT * FROM credit_sales WHERE id = ?', (credit_sale_id,))
+            credit = cursor.fetchone()
+            
+            if credit:
+                new_balance = credit['remaining_balance'] - amount
+                paid_installments = credit['paid_installments'] + 1
+                
+                # Calcular siguiente fecha de pago
+                from datetime import datetime, timedelta
+                current_next = datetime.strptime(credit['next_payment_date'], '%Y-%m-%d')
+                
+                # Días según frecuencia
+                freq_days = {
+                    'weekly': 7,
+                    'biweekly': 15,
+                    'monthly': 30
+                }
+                days_to_add = freq_days.get(credit['payment_frequency'], 30)
+                next_date = current_next + timedelta(days=days_to_add)
+                
+                # Determinar estado
+                status = 'paid' if new_balance <= 0 else 'active'
+                
+                # Actualizar crédito
+                cursor.execute('''
+                    UPDATE credit_sales 
+                    SET remaining_balance = ?,
+                        paid_installments = ?,
+                        next_payment_date = ?,
+                        status = ?
+                    WHERE id = ?
+                ''', (new_balance, paid_installments, next_date.strftime('%Y-%m-%d'), 
+                      status, credit_sale_id))
+            
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_credit_payments(self, credit_sale_id):
+        """Obtiene todos los pagos de un crédito"""
+        query = '''
+            SELECT * FROM credit_payments 
+            WHERE credit_sale_id = ?
+            ORDER BY payment_date DESC
+        '''
+        return self.execute_query(query, (credit_sale_id,))
+    
+    def update_next_payment_date(self, credit_sale_id, new_date):
+        """Actualiza la fecha del próximo pago"""
+        query = 'UPDATE credit_sales SET next_payment_date = ? WHERE id = ?'
+        self.execute_update(query, (new_date, credit_sale_id))
+    
+    def get_overdue_credits(self):
+        """Obtiene créditos vencidos"""
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
+        query = '''
+            SELECT cs.*, c.name as customer_name, c.phone
+            FROM credit_sales cs
+            JOIN customers c ON cs.customer_id = c.id
+            WHERE cs.status = 'active' 
+            AND cs.next_payment_date < ?
+            ORDER BY cs.next_payment_date ASC
+        '''
+        return self.execute_query(query, (today,))
     
     def get_sales_by_date(self, start_date, end_date):
         """Obtiene ventas en un rango de fechas"""

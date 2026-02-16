@@ -139,7 +139,7 @@ PATHS = {
 # ============= CONFIGURACIÓN DE NEGOCIO =============
 BUSINESS = {
     'name': 'Venialgo Sistemas',
-    'currency': '$',
+    'currency': '₲',
     'tax_rate': 0.10,  # 10% impuesto
     'decimal_places': 2,
 }

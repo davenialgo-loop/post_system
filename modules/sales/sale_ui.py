@@ -336,7 +336,7 @@ class SalesModule:
         
         dialog = tk.Toplevel(self.parent)
         dialog.title("Finalizar Venta")
-        dialog.geometry("500x500")
+        dialog.geometry("500x650")
         dialog.resizable(False, False)
         dialog.configure(bg=COLORS['bg_card'])
         dialog.transient(self.parent)
@@ -365,12 +365,51 @@ class SalesModule:
             fg=COLORS['success']
         ).pack(anchor='w')
         
-        # ========== MÉTODO DE PAGO ==========
-        payment_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
-        payment_frame.pack(fill='x')
+        # ========== TIPO DE VENTA ==========
+        sale_type_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        sale_type_frame.pack(fill='x')
         
         tk.Label(
-            payment_frame,
+            sale_type_frame,
+            text="Tipo de Venta*",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary']
+        ).pack(anchor='w', pady=(0, 5))
+        
+        sale_type_var = tk.StringVar(value="cash")
+        
+        tk.Radiobutton(
+            sale_type_frame,
+            text="💵 Venta al Contado",
+            variable=sale_type_var,
+            value="cash",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary'],
+            selectcolor=COLORS['bg_card'],
+            command=lambda: toggle_credit_options()
+        ).pack(anchor='w')
+        
+        tk.Radiobutton(
+            sale_type_frame,
+            text="💳 Venta a Crédito",
+            variable=sale_type_var,
+            value="credit",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary'],
+            selectcolor=COLORS['bg_card'],
+            command=lambda: toggle_credit_options()
+        ).pack(anchor='w', pady=(5, 0))
+        
+        # ========== OPCIONES DE CONTADO ==========
+        cash_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        cash_frame.pack(fill='x')
+        
+        # Método de pago
+        tk.Label(
+            cash_frame,
             text="Método de Pago*",
             font=(FONTS['family'], FONTS['body']),
             bg=COLORS['bg_card'],
@@ -381,7 +420,7 @@ class SalesModule:
         payment_options = ["Efectivo", "Tarjeta de Crédito", "Tarjeta de Débito", "Transferencia"]
         
         payment_combo = ttk.Combobox(
-            payment_frame,
+            cash_frame,
             textvariable=payment_var,
             values=payment_options,
             state='readonly',
@@ -390,9 +429,9 @@ class SalesModule:
         )
         payment_combo.grid(row=1, column=0, pady=(0, SPACING['md']))
         
-        # ========== MONTO PAGADO ==========
+        # Monto pagado
         tk.Label(
-            payment_frame,
+            cash_frame,
             text="Monto Pagado*",
             font=(FONTS['family'], FONTS['body']),
             bg=COLORS['bg_card'],
@@ -400,16 +439,16 @@ class SalesModule:
         ).grid(row=2, column=0, sticky='w', pady=(0, 5))
         
         entry_paid = tk.Entry(
-            payment_frame,
+            cash_frame,
             font=(FONTS['family'], FONTS['body']),
             width=27
         )
         entry_paid.grid(row=3, column=0, pady=(0, SPACING['md']))
-        entry_paid.insert(0, str(total))
+        entry_paid.insert(0, str(int(total)))
         
-        # ========== CAMBIO ==========
+        # Cambio
         tk.Label(
-            payment_frame,
+            cash_frame,
             text="Cambio:",
             font=(FONTS['family'], FONTS['body']),
             bg=COLORS['bg_card'],
@@ -417,8 +456,8 @@ class SalesModule:
         ).grid(row=4, column=0, sticky='w', pady=(0, 5))
         
         change_label = tk.Label(
-            payment_frame,
-            text="$0.00",
+            cash_frame,
+            text="₲0",
             font=(FONTS['family'], FONTS['heading'], 'bold'),
             bg=COLORS['bg_card'],
             fg=COLORS['success']
@@ -435,59 +474,222 @@ class SalesModule:
                 else:
                     change_label.config(text=format_currency(change), fg=COLORS['success'])
             except:
-                change_label.config(text="$0.00", fg=COLORS['text_secondary'])
+                change_label.config(text="₲0", fg=COLORS['text_secondary'])
         
         entry_paid.bind('<KeyRelease>', calculate_change)
         calculate_change()
+        
+        # ========== OPCIONES DE CRÉDITO ==========
+        credit_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        
+        # Cliente (requerido para crédito)
+        tk.Label(
+            credit_frame,
+            text="Cliente*",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary']
+        ).grid(row=0, column=0, sticky='w', pady=(0, 5))
+        
+        customers = self.db.get_all_customers()
+        customer_names = [f"{c['id']} - {c['name']}" for c in customers]
+        
+        customer_var = tk.StringVar()
+        customer_combo = ttk.Combobox(
+            credit_frame,
+            textvariable=customer_var,
+            values=customer_names,
+            font=(FONTS['family'], FONTS['body']),
+            width=25
+        )
+        customer_combo.grid(row=1, column=0, pady=(0, SPACING['md']))
+        
+        # Cuota inicial
+        tk.Label(
+            credit_frame,
+            text="Cuota Inicial*",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary']
+        ).grid(row=2, column=0, sticky='w', pady=(0, 5))
+        
+        entry_down_payment = tk.Entry(
+            credit_frame,
+            font=(FONTS['family'], FONTS['body']),
+            width=27
+        )
+        entry_down_payment.grid(row=3, column=0, pady=(0, SPACING['md']))
+        min_down = int(total * 0.1)
+        entry_down_payment.insert(0, str(min_down))
+        
+        # Frecuencia de pago
+        tk.Label(
+            credit_frame,
+            text="Frecuencia de Pago*",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary']
+        ).grid(row=4, column=0, sticky='w', pady=(0, 5))
+        
+        from config.settings import CREDIT
+        freq_var = tk.StringVar(value="weekly")
+        freq_options = [(v['name'], k) for k, v in CREDIT['payment_frequencies'].items()]
+        
+        freq_frame = tk.Frame(credit_frame, bg=COLORS['bg_card'])
+        freq_frame.grid(row=5, column=0, sticky='w', pady=(0, SPACING['md']))
+        
+        for text, value in freq_options:
+            tk.Radiobutton(
+                freq_frame,
+                text=text,
+                variable=freq_var,
+                value=value,
+                font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'],
+                fg=COLORS['text_primary'],
+                selectcolor=COLORS['bg_card']
+            ).pack(side='left', padx=(0, SPACING['md']))
+        
+        # Número de cuotas
+        tk.Label(
+            credit_frame,
+            text="Número de Cuotas*",
+            font=(FONTS['family'], FONTS['body']),
+            bg=COLORS['bg_card'],
+            fg=COLORS['text_primary']
+        ).grid(row=6, column=0, sticky='w', pady=(0, 5))
+        
+        entry_installments = tk.Entry(
+            credit_frame,
+            font=(FONTS['family'], FONTS['body']),
+            width=27
+        )
+        entry_installments.grid(row=7, column=0, pady=(0, SPACING['md']))
+        entry_installments.insert(0, "4")
+        
+        def toggle_credit_options():
+            """Muestra/oculta opciones según tipo de venta"""
+            if sale_type_var.get() == "credit":
+                cash_frame.pack_forget()
+                credit_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
+            else:
+                credit_frame.pack_forget()
+                cash_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
+        
+        # Mostrar opciones iniciales (contado por defecto)
+        toggle_credit_options()
         
         # ========== BOTONES ==========
         buttons_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
         buttons_frame.pack(fill='x')
         
         def finalize_sale():
-            """Finaliza la venta y guarda en BD"""
+            """Finaliza la venta (contado o crédito)"""
             try:
-                paid = float(entry_paid.get())
-                if paid < total:
-                    messagebox.showerror("Error", "El monto pagado es insuficiente")
-                    return
+                from datetime import datetime, timedelta
                 
-                change = paid - total
+                if sale_type_var.get() == "cash":
+                    # Venta al contado
+                    paid = float(entry_paid.get())
+                    if paid < total:
+                        messagebox.showerror("Error", "El monto pagado es insuficiente")
+                        return
+                    
+                    change = paid - total
+                    
+                    cart_items = [{
+                        'product_id': item['product_id'],
+                        'quantity': item['quantity'],
+                        'unit_price': item['unit_price'],
+                        'subtotal': item['subtotal']
+                    } for item in self.cart]
+                    
+                    sale_id = self.db.create_sale(
+                        customer_id=self.selected_customer_id,
+                        total=total,
+                        payment_method=payment_var.get(),
+                        amount_paid=paid,
+                        change_amount=change,
+                        cart_items=cart_items,
+                        is_credit=False
+                    )
+                    
+                    self.show_ticket(sale_id, total, payment_var.get(), paid, change)
+                    
+                else:
+                    # Venta a crédito
+                    if not customer_var.get():
+                        messagebox.showerror("Error", "Debe seleccionar un cliente para venta a crédito")
+                        return
+                    
+                    customer_id = int(customer_var.get().split(' - ')[0])
+                    down_payment = float(entry_down_payment.get())
+                    installments = int(entry_installments.get())
+                    
+                    if down_payment < total * 0.1:
+                        messagebox.showerror("Error", f"La cuota inicial debe ser al menos {format_currency(total * 0.1)}")
+                        return
+                    
+                    if installments < 1 or installments > 24:
+                        messagebox.showerror("Error", "El número de cuotas debe estar entre 1 y 24")
+                        return
+                    
+                    remaining = total - down_payment
+                    installment_amount = remaining / installments
+                    
+                    # Calcular primera fecha de pago
+                    freq_days = CREDIT['payment_frequencies'][freq_var.get()]['days']
+                    first_payment_date = (datetime.now() + timedelta(days=freq_days)).strftime('%Y-%m-%d')
+                    
+                    cart_items = [{
+                        'product_id': item['product_id'],
+                        'quantity': item['quantity'],
+                        'unit_price': item['unit_price'],
+                        'subtotal': item['subtotal']
+                    } for item in self.cart]
+                    
+                    # Crear venta
+                    sale_id = self.db.create_sale(
+                        customer_id=customer_id,
+                        total=total,
+                        payment_method="Crédito",
+                        amount_paid=down_payment,
+                        change_amount=0,
+                        cart_items=cart_items,
+                        is_credit=True
+                    )
+                    
+                    # Crear registro de crédito
+                    self.db.create_credit_sale(
+                        sale_id=sale_id,
+                        customer_id=customer_id,
+                        total_amount=total,
+                        down_payment=down_payment,
+                        payment_frequency=freq_var.get(),
+                        installment_amount=installment_amount,
+                        total_installments=installments,
+                        next_payment_date=first_payment_date
+                    )
+                    
+                    messagebox.showinfo(
+                        "Éxito",
+                        f"Venta a crédito registrada\n"
+                        f"Total: {format_currency(total)}\n"
+                        f"Inicial: {format_currency(down_payment)}\n"
+                        f"Saldo: {format_currency(remaining)}\n"
+                        f"Cuotas: {installments} de {format_currency(installment_amount)}\n"
+                        f"Próximo pago: {first_payment_date}"
+                    )
                 
-                # Preparar items del carrito para la BD
-                cart_items = [{
-                    'product_id': item['product_id'],
-                    'quantity': item['quantity'],
-                    'unit_price': item['unit_price'],
-                    'subtotal': item['subtotal']
-                } for item in self.cart]
-                
-                # Guardar venta en la base de datos
-                sale_id = self.db.create_sale(
-                    customer_id=self.selected_customer_id,
-                    total=total,
-                    payment_method=payment_var.get(),
-                    amount_paid=paid,
-                    change_amount=change,
-                    cart_items=cart_items
-                )
-                
-                # Generar ticket
-                self.show_ticket(sale_id, total, payment_var.get(), paid, change)
-                
-                # Limpiar carrito
                 self.cart = []
                 self.update_cart_display()
-                
                 dialog.destroy()
-                messagebox.showinfo("Éxito", f"Venta #{sale_id} registrada exitosamente")
                 
             except ValueError:
-                messagebox.showerror("Error", "Ingrese un monto válido")
+                messagebox.showerror("Error", "Ingrese valores numéricos válidos")
             except Exception as e:
                 messagebox.showerror("Error", f"Error al procesar venta: {str(e)}")
         
-        # Estilo personalizado para botón de confirmación
         confirm_style = BUTTON_STYLES['success'].copy()
         
         btn_finalize = tk.Button(

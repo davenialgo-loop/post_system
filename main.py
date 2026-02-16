@@ -108,6 +108,7 @@ class POSApp:
         
         menu_items = [
             ("💰 Punto de Venta", self.show_sales_module, "sales"),
+            ("💳 Créditos", self.show_credits_module, "credits"),
             ("📦 Productos", self.show_products_module, "products"),
             ("👥 Clientes", self.show_customers_module, "customers"),
             ("📊 Reportes", self.show_reports_module, "reports"),
@@ -164,6 +165,15 @@ class POSApp:
         # Importar y crear módulo de ventas
         from modules.sales.sale_ui import SalesModule
         SalesModule(self.content_area, self.db)
+    
+    def show_credits_module(self):
+        """Muestra el módulo de gestión de créditos"""
+        self.clear_content_area()
+        self.highlight_menu_button('credits')
+        
+        # Importar y crear módulo de créditos
+        from modules.credits.credit_ui import CreditsModule
+        CreditsModule(self.content_area, self.db)
     
     def show_products_module(self):
         """Muestra el módulo de gestión de productos"""

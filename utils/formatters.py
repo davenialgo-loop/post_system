@@ -4,15 +4,16 @@ Funciones de formateo para el sistema POS
 
 from datetime import datetime
 
-def format_currency(amount, currency_symbol='$'):
+def format_currency(amount, currency_symbol='₲'):
     """
     Formatea un número como moneda
-    Ejemplo: 1234.5 -> $1,234.50
+    Para guaraníes: ₲1.234.567 (sin decimales)
     """
     try:
-        return f"{currency_symbol}{amount:,.2f}"
+        # Guaraníes no usan decimales
+        return f"{currency_symbol}{int(amount):,}".replace(',', '.')
     except:
-        return f"{currency_symbol}0.00"
+        return f"{currency_symbol}0"
 
 def format_date(date_str):
     """
