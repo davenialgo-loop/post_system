@@ -11,7 +11,7 @@ from database.db_manager import DatabaseManager
 class POSApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Venialgo Sistemas - POS Profesional")
+        self.root.title("Venialgo Sistemas - POS")
         self.root.geometry(f"{WINDOW['main_width']}x{WINDOW['main_height']}")
         self.root.minsize(WINDOW['min_width'], WINDOW['min_height'])
         
@@ -34,22 +34,37 @@ class POSApp:
         """Configura estilos personalizados de ttk"""
         style = ttk.Style()
         
+        # Usar tema que funcione bien en Windows
+        try:
+            style.theme_use('clam')
+        except:
+            pass
+        
         # Estilo para Treeview (tablas)
         style.configure("Treeview",
-                       background=COLORS['bg_card'],
-                       foreground=COLORS['text_primary'],
+                       background="white",
+                       foreground="black",
                        rowheight=30,
-                       fieldbackground=COLORS['bg_card'],
-                       borderwidth=0)
+                       fieldbackground="white",
+                       borderwidth=1)
         
+        # Headers con fondo oscuro y texto blanco
         style.configure("Treeview.Heading",
-                       background=COLORS['primary'],
-                       foreground=COLORS['text_white'],
+                       background="#1e293b",  # Fondo oscuro
+                       foreground="white",     # Texto blanco
                        relief="flat",
+                       borderwidth=1,
                        font=(FONTS['family'], FONTS['body'], 'bold'))
         
+        # Efectos de hover
         style.map('Treeview.Heading',
-                 background=[('active', COLORS['primary_hover'])])
+                 background=[('active', '#2563eb')],
+                 foreground=[('active', 'white')])
+        
+        # Filas seleccionadas
+        style.map('Treeview',
+                 background=[('selected', '#2563eb')],
+                 foreground=[('selected', 'white')])
     
     def create_layout(self):
         """Crea el layout principal de la aplicación"""

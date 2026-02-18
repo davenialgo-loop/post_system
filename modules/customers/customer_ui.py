@@ -20,7 +20,6 @@ class CustomerModule:
     def create_ui(self):
         """Crea la interfaz del módulo de clientes"""
         
-        # ========== HEADER ==========
         header_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
         header_frame.pack(fill='x', padx=SPACING['lg'], pady=(SPACING['lg'], SPACING['md']))
         
@@ -33,11 +32,9 @@ class CustomerModule:
         )
         title.pack(side='left')
         
-        # ========== BARRA DE BÚSQUEDA Y ACCIONES ==========
         search_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
         search_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
         
-        # Búsqueda
         tk.Label(
             search_frame,
             text="Buscar:",
@@ -59,7 +56,6 @@ class CustomerModule:
         )
         search_entry.pack(side='left', padx=SPACING['sm'])
         
-        # Botón Nuevo Cliente
         btn_new = tk.Button(
             search_frame,
             text="➕ Nuevo Cliente",
@@ -68,15 +64,12 @@ class CustomerModule:
         )
         btn_new.pack(side='right', padx=SPACING['sm'])
         
-        # ========== TABLA DE CLIENTES ==========
         table_frame = tk.Frame(self.parent, bg=COLORS['bg_card'])
         table_frame.pack(fill='both', expand=True, padx=SPACING['lg'], pady=SPACING['md'])
         
-        # Scrollbar
         scrollbar = ttk.Scrollbar(table_frame)
         scrollbar.pack(side='right', fill='y')
         
-        # Treeview
         columns = ('ID', 'Nombre', 'Teléfono', 'Email', 'Dirección')
         self.tree = ttk.Treeview(
             table_frame,
@@ -86,7 +79,6 @@ class CustomerModule:
             selectmode='browse'
         )
         
-        # Configurar columnas
         self.tree.heading('ID', text='ID')
         self.tree.heading('Nombre', text='Nombre')
         self.tree.heading('Teléfono', text='Teléfono')
@@ -102,10 +94,8 @@ class CustomerModule:
         self.tree.pack(fill='both', expand=True)
         scrollbar.config(command=self.tree.yview)
         
-        # Evento de selección
         self.tree.bind('<<TreeviewSelect>>', self.on_customer_select)
         
-        # ========== BOTONES DE ACCIÓN ==========
         actions_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
         actions_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
         
@@ -129,17 +119,14 @@ class CustomerModule:
     
     def load_customers(self, search_term=''):
         """Carga los clientes en la tabla"""
-        # Limpiar tabla
         for item in self.tree.get_children():
             self.tree.delete(item)
         
-        # Obtener clientes
         if search_term:
             customers = self.db.search_customers(search_term)
         else:
             customers = self.db.get_all_customers()
         
-        # Insertar en tabla
         for customer in customers:
             self.tree.insert('', 'end', values=(
                 customer['id'],
@@ -181,86 +168,64 @@ class CustomerModule:
         """Muestra diálogo para agregar o editar cliente"""
         dialog = tk.Toplevel(self.parent)
         dialog.title("Nuevo Cliente" if mode == 'add' else "Editar Cliente")
-        dialog.geometry("450x400")
+        dialog.geometry("520x580")
         dialog.resizable(False, False)
         dialog.configure(bg=COLORS['bg_card'])
-        
-        # Centrar ventana
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # Si es edición, cargar datos del cliente
         customer_data = None
         if mode == 'edit' and customer_id:
             result = self.db.execute_query('SELECT * FROM customers WHERE id = ?', (customer_id,))
             customer_data = result[0] if result else None
         
-        # ========== FORMULARIO ==========
-        form_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
+        main_container = tk.Frame(dialog, bg=COLORS['bg_card'])
+        main_container.pack(fill='both', expand=True)
+        
+        form_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
         form_frame.pack(fill='both', expand=True)
         
-        # Nombre
         tk.Label(
             form_frame,
-            text="Nombre del Cliente*",
-            font=(FONTS['family'], FONTS['body']),
+            text="Nuevo Cliente" if mode == 'add' else "Editar Cliente",
+            font=(FONTS['family'], FONTS['heading'], 'bold'),
             bg=COLORS['bg_card'],
             fg=COLORS['text_primary']
-        ).grid(row=0, column=0, sticky='w', pady=(0, 5))
+        ).pack(anchor='w', pady=(0, SPACING['lg']))
         
-        entry_name = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_name.grid(row=1, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Nombre del Cliente*", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_name = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_name.pack(fill='x', pady=(0, SPACING['md']))
         if customer_data:
             entry_name.insert(0, customer_data['name'])
+        entry_name.focus()
         
-        # Teléfono
-        tk.Label(
-            form_frame,
-            text="Teléfono",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=2, column=0, sticky='w', pady=(0, 5))
-        
-        entry_phone = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_phone.grid(row=3, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Teléfono", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_phone = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_phone.pack(fill='x', pady=(0, SPACING['md']))
         if customer_data:
             entry_phone.insert(0, customer_data['phone'] or '')
         
-        # Email
-        tk.Label(
-            form_frame,
-            text="Email",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=4, column=0, sticky='w', pady=(0, 5))
-        
-        entry_email = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_email.grid(row=5, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Email", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_email = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_email.pack(fill='x', pady=(0, SPACING['md']))
         if customer_data:
             entry_email.insert(0, customer_data['email'] or '')
         
-        # Dirección
-        tk.Label(
-            form_frame,
-            text="Dirección",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=6, column=0, sticky='w', pady=(0, 5))
-        
-        entry_address = tk.Text(form_frame, font=(FONTS['family'], FONTS['body']), width=40, height=4)
-        entry_address.grid(row=7, column=0, pady=(0, SPACING['lg']))
+        tk.Label(form_frame, text="Dirección", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_address = tk.Text(form_frame, font=(FONTS['family'], FONTS['body']), height=4)
+        entry_address.pack(fill='x', pady=(0, SPACING['md']))
         if customer_data:
             entry_address.insert('1.0', customer_data['address'] or '')
         
-        # ========== BOTONES ==========
-        buttons_frame = tk.Frame(form_frame, bg=COLORS['bg_card'])
-        buttons_frame.grid(row=8, column=0, pady=SPACING['md'])
+        buttons_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        buttons_frame.pack(fill='x', side='bottom')
         
         def save_customer():
-            # Validar campos
             is_valid, msg, name = validate_required_field(entry_name.get(), "Nombre")
             if not is_valid:
                 messagebox.showerror("Error", msg)
@@ -298,31 +263,17 @@ class CustomerModule:
             except Exception as e:
                 messagebox.showerror("Error", f"Error al guardar: {str(e)}")
         
-        btn_save = tk.Button(
-            buttons_frame,
-            text="💾 Guardar",
-            command=save_customer,
-            **BUTTON_STYLES['success']
-        )
-        btn_save.pack(side='left', padx=SPACING['sm'])
-        
-        btn_cancel = tk.Button(
-            buttons_frame,
-            text="❌ Cancelar",
-            command=dialog.destroy,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_cancel.pack(side='left', padx=SPACING['sm'])
+        tk.Button(buttons_frame, text="💾 Guardar", command=save_customer,
+                 **BUTTON_STYLES['success']).pack(side='left', padx=SPACING['sm'])
+        tk.Button(buttons_frame, text="❌ Cancelar", command=dialog.destroy,
+                 **BUTTON_STYLES['secondary']).pack(side='left', padx=SPACING['sm'])
     
     def delete_customer(self):
         """Elimina el cliente seleccionado"""
         if not self.selected_customer_id:
             return
         
-        response = messagebox.askyesno(
-            "Confirmar",
-            "¿Está seguro de eliminar este cliente?"
-        )
+        response = messagebox.askyesno("Confirmar", "¿Está seguro de eliminar este cliente?")
         
         if response:
             try:

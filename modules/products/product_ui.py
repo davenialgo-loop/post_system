@@ -38,7 +38,6 @@ class ProductModule:
         search_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
         search_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
         
-        # Búsqueda
         tk.Label(
             search_frame,
             text="Buscar:",
@@ -60,7 +59,6 @@ class ProductModule:
         )
         search_entry.pack(side='left', padx=SPACING['sm'])
         
-        # Botón Nuevo Producto
         btn_new = tk.Button(
             search_frame,
             text="➕ Nuevo Producto",
@@ -73,11 +71,9 @@ class ProductModule:
         table_frame = tk.Frame(self.parent, bg=COLORS['bg_card'])
         table_frame.pack(fill='both', expand=True, padx=SPACING['lg'], pady=SPACING['md'])
         
-        # Scrollbar
         scrollbar = ttk.Scrollbar(table_frame)
         scrollbar.pack(side='right', fill='y')
         
-        # Treeview
         columns = ('ID', 'Nombre', 'Precio', 'Stock', 'Categoría', 'Código')
         self.tree = ttk.Treeview(
             table_frame,
@@ -87,7 +83,6 @@ class ProductModule:
             selectmode='browse'
         )
         
-        # Configurar columnas
         self.tree.heading('ID', text='ID')
         self.tree.heading('Nombre', text='Nombre')
         self.tree.heading('Precio', text='Precio')
@@ -105,7 +100,6 @@ class ProductModule:
         self.tree.pack(fill='both', expand=True)
         scrollbar.config(command=self.tree.yview)
         
-        # Evento de selección
         self.tree.bind('<<TreeviewSelect>>', self.on_product_select)
         
         # ========== BOTONES DE ACCIÓN ==========
@@ -132,17 +126,14 @@ class ProductModule:
     
     def load_products(self, search_term=''):
         """Carga los productos en la tabla"""
-        # Limpiar tabla
         for item in self.tree.get_children():
             self.tree.delete(item)
         
-        # Obtener productos
         if search_term:
             products = self.db.search_products(search_term)
         else:
             products = self.db.get_all_products()
         
-        # Insertar en tabla
         for product in products:
             self.tree.insert('', 'end', values=(
                 product['id'],
@@ -182,107 +173,75 @@ class ProductModule:
         self.show_product_dialog(mode='edit', product_id=self.selected_product_id)
     
     def show_product_dialog(self, mode='add', product_id=None):
-        """
-        Muestra diálogo para agregar o editar producto
-        mode: 'add' o 'edit'
-        """
+        """Muestra diálogo para agregar o editar producto"""
         dialog = tk.Toplevel(self.parent)
         dialog.title("Nuevo Producto" if mode == 'add' else "Editar Producto")
-        dialog.geometry("450x400")
+        dialog.geometry("520x600")
         dialog.resizable(False, False)
         dialog.configure(bg=COLORS['bg_card'])
-        
-        # Centrar ventana
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # Si es edición, cargar datos del producto
         product_data = None
         if mode == 'edit' and product_id:
             product_data = self.db.get_product_by_id(product_id)
         
-        # ========== FORMULARIO ==========
-        form_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
+        main_container = tk.Frame(dialog, bg=COLORS['bg_card'])
+        main_container.pack(fill='both', expand=True)
+        
+        form_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
         form_frame.pack(fill='both', expand=True)
         
-        # Nombre
         tk.Label(
             form_frame,
-            text="Nombre del Producto*",
-            font=(FONTS['family'], FONTS['body']),
+            text="Nuevo Producto" if mode == 'add' else "Editar Producto",
+            font=(FONTS['family'], FONTS['heading'], 'bold'),
             bg=COLORS['bg_card'],
             fg=COLORS['text_primary']
-        ).grid(row=0, column=0, sticky='w', pady=(0, 5))
+        ).pack(anchor='w', pady=(0, SPACING['lg']))
         
-        entry_name = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_name.grid(row=1, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Nombre del Producto*", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_name = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_name.pack(fill='x', pady=(0, SPACING['md']))
         if product_data:
             entry_name.insert(0, product_data['name'])
+        entry_name.focus()
         
-        # Precio
-        tk.Label(
-            form_frame,
-            text="Precio*",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=2, column=0, sticky='w', pady=(0, 5))
-        
-        entry_price = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_price.grid(row=3, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Precio*", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_price = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_price.pack(fill='x', pady=(0, SPACING['md']))
         if product_data:
-            entry_price.insert(0, str(product_data['price']))
+            entry_price.insert(0, str(int(product_data['price'])))
         
-        # Stock
-        tk.Label(
-            form_frame,
-            text="Stock Inicial",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=4, column=0, sticky='w', pady=(0, 5))
-        
-        entry_stock = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_stock.grid(row=5, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Stock Inicial", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_stock = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_stock.pack(fill='x', pady=(0, SPACING['md']))
         if product_data:
             entry_stock.insert(0, str(product_data['stock']))
         else:
             entry_stock.insert(0, "0")
         
-        # Categoría
-        tk.Label(
-            form_frame,
-            text="Categoría",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=6, column=0, sticky='w', pady=(0, 5))
-        
-        entry_category = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_category.grid(row=7, column=0, pady=(0, SPACING['md']))
+        tk.Label(form_frame, text="Categoría", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_category = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_category.pack(fill='x', pady=(0, SPACING['md']))
         if product_data:
             entry_category.insert(0, product_data['category'] or '')
         
-        # Código de barras
-        tk.Label(
-            form_frame,
-            text="Código de Barras",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=8, column=0, sticky='w', pady=(0, 5))
-        
-        entry_barcode = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=40)
-        entry_barcode.grid(row=9, column=0, pady=(0, SPACING['lg']))
+        tk.Label(form_frame, text="Código de Barras", font=(FONTS['family'], FONTS['body']),
+                bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
+        entry_barcode = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_barcode.pack(fill='x', pady=(0, SPACING['md']))
         if product_data:
             entry_barcode.insert(0, product_data['barcode'] or '')
         
-        # ========== BOTONES ==========
-        buttons_frame = tk.Frame(form_frame, bg=COLORS['bg_card'])
-        buttons_frame.grid(row=10, column=0, pady=SPACING['md'])
+        buttons_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        buttons_frame.pack(fill='x', side='bottom')
         
         def save_product():
-            # Validar campos
             is_valid, msg, name = validate_required_field(entry_name.get(), "Nombre")
             if not is_valid:
                 messagebox.showerror("Error", msg)
@@ -314,32 +273,17 @@ class ProductModule:
             except Exception as e:
                 messagebox.showerror("Error", f"Error al guardar: {str(e)}")
         
-        btn_save = tk.Button(
-            buttons_frame,
-            text="💾 Guardar",
-            command=save_product,
-            **BUTTON_STYLES['success']
-        )
-        btn_save.pack(side='left', padx=SPACING['sm'])
-        
-        btn_cancel = tk.Button(
-            buttons_frame,
-            text="❌ Cancelar",
-            command=dialog.destroy,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_cancel.pack(side='left', padx=SPACING['sm'])
+        tk.Button(buttons_frame, text="💾 Guardar", command=save_product,
+                 **BUTTON_STYLES['success']).pack(side='left', padx=SPACING['sm'])
+        tk.Button(buttons_frame, text="❌ Cancelar", command=dialog.destroy,
+                 **BUTTON_STYLES['secondary']).pack(side='left', padx=SPACING['sm'])
     
     def delete_product(self):
         """Elimina el producto seleccionado"""
         if not self.selected_product_id:
             return
         
-        # Confirmar eliminación
-        response = messagebox.askyesno(
-            "Confirmar",
-            "¿Está seguro de eliminar este producto?"
-        )
+        response = messagebox.askyesno("Confirmar", "¿Está seguro de eliminar este producto?")
         
         if response:
             try:
