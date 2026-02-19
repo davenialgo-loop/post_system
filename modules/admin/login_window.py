@@ -18,7 +18,16 @@ except ImportError:
                'body': 10, 'small': 9}
     SPACING = {'xs': 4, 'sm': 8, 'md': 12, 'lg': 16, 'xl': 24}
 
-DB_FILE = "pos_database.db"
+import os as _os, sys as _sys
+def _get_db_file():
+    if _sys.platform == "win32":
+        base = _os.environ.get("APPDATA", _os.path.expanduser("~"))
+    else:
+        base = _os.path.expanduser("~")
+    d = _os.path.join(base, "VenialgoPOS")
+    _os.makedirs(d, exist_ok=True)
+    return _os.path.join(d, "pos_database.db")
+DB_FILE = _get_db_file()
 
 FOOTER_INFO = {
     "empresa":  "Venialgo Sistemas",
@@ -52,6 +61,9 @@ def verify_login(usuario, password):
     """Verifica credenciales. Retorna (id, nombre, rol) o None."""
     hpwd = hashlib.sha256(password.encode()).hexdigest()
     try:
+        # Asegurar que las tablas existen antes de consultar
+        from modules.admin.admin_ui import _ensure_tables
+        _ensure_tables()
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("""SELECT id,nombre,rol FROM usuarios
@@ -60,7 +72,8 @@ def verify_login(usuario, password):
         row = c.fetchone()
         conn.close()
         return row
-    except Exception:
+    except Exception as e:
+        print(f"Error login: {e}")
         return None
 
 
@@ -79,12 +92,16 @@ class LoginWindow:
         self.root       = root
         self.on_success = on_success
 
-        self.root.title("Sistema POS — Iniciar Sesión")
+        self.root.title("Sistema POS - Iniciar Sesion")
         self.root.geometry("420x540")
         self.root.resizable(False, False)
         self.root.configure(bg=COLORS['bg_sidebar'])
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._center()
         self._build()
+
+    def _on_close(self):
+        self.root.destroy()
 
     def _center(self):
         self.root.update_idletasks()
@@ -164,5 +181,8 @@ class LoginWindow:
             self.root.destroy()
             self.on_success(uid, nombre, rol)
         else:
-            messagebox.showerror("Error",
-                                 "Credenciales incorrectas o usuario inactivo.")
+            messagebox.showerror("Error de acceso",
+                "Credenciales incorrectas o usuario inactivo.\n\n"
+                "Usuario por defecto: admin\n"
+                "Contrasena por defecto: admin123",
+                parent=self.root)

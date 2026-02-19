@@ -25,7 +25,16 @@ except ImportError:
               'body': 10, 'small': 9}
     SPACING = {'xs': 4, 'sm': 8, 'md': 12, 'lg': 16, 'xl': 24}
 
-DB_FILE = "pos_database.db"
+import os as _os, sys as _sys
+def _get_db_file():
+    if _sys.platform == "win32":
+        base = _os.environ.get("APPDATA", _os.path.expanduser("~"))
+    else:
+        base = _os.path.expanduser("~")
+    d = _os.path.join(base, "VenialgoPOS")
+    _os.makedirs(d, exist_ok=True)
+    return _os.path.join(d, "pos_database.db")
+DB_FILE = _get_db_file()
 ROLES   = ["Administrador", "Supervisor", "Cajero"]
 
 # ════════════════════════════════════════════════════════
