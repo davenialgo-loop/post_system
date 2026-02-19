@@ -8,97 +8,113 @@ from tkinter import ttk, messagebox
 from config.settings import COLORS, FONTS, WINDOW, SPACING, BUTTON_STYLES
 from database.db_manager import DatabaseManager
 
+# ── Asegurar tablas de administración al arrancar ────────
+from modules.admin.admin_ui import _ensure_tables
+from modules.admin.login_window import add_footer, LoginWindow
+_ensure_tables()
+
+
 class POSApp:
-    def __init__(self, root):
+    def __init__(self, root, current_user=None):
         self.root = root
+        # current_user = {"id": uid, "nombre": nombre, "rol": rol}
+        self.current_user = current_user or {"id": 0, "nombre": "Sistema", "rol": "Administrador"}
+
         self.root.title("Venialgo Sistemas - POS")
         self.root.geometry(f"{WINDOW['main_width']}x{WINDOW['main_height']}")
         self.root.minsize(WINDOW['min_width'], WINDOW['min_height'])
-        
+
         # Inicializar base de datos
         self.db = DatabaseManager()
-        
+
         # Variable para rastrear módulo actual
         self.current_module = None
-        
+
         # Configurar estilos
         self.setup_styles()
-        
+
         # Crear interfaz
         self.create_layout()
-        
+
         # Cargar módulo de ventas por defecto
         self.show_sales_module()
-    
+
     def setup_styles(self):
         """Configura estilos personalizados de ttk"""
         style = ttk.Style()
-        
-        # Usar tema que funcione bien en Windows
+
         try:
             style.theme_use('clam')
         except:
             pass
-        
-        # Estilo para Treeview (tablas)
+
         style.configure("Treeview",
-                       background="white",
-                       foreground="black",
-                       rowheight=30,
-                       fieldbackground="white",
-                       borderwidth=1)
-        
-        # Headers con fondo oscuro y texto blanco
+                        background="white",
+                        foreground="black",
+                        rowheight=30,
+                        fieldbackground="white",
+                        borderwidth=1)
+
         style.configure("Treeview.Heading",
-                       background="#1e293b",  # Fondo oscuro
-                       foreground="white",     # Texto blanco
-                       relief="flat",
-                       borderwidth=1,
-                       font=(FONTS['family'], FONTS['body'], 'bold'))
-        
-        # Efectos de hover
+                        background="#1e293b",
+                        foreground="white",
+                        relief="flat",
+                        borderwidth=1,
+                        font=(FONTS['family'], FONTS['body'], 'bold'))
+
         style.map('Treeview.Heading',
-                 background=[('active', '#2563eb')],
-                 foreground=[('active', 'white')])
-        
-        # Filas seleccionadas
+                  background=[('active', '#2563eb')],
+                  foreground=[('active', 'white')])
+
         style.map('Treeview',
-                 background=[('selected', '#2563eb')],
-                 foreground=[('selected', 'white')])
-    
+                  background=[('selected', '#2563eb')],
+                  foreground=[('selected', 'white')])
+
     def create_layout(self):
         """Crea el layout principal de la aplicación"""
-        
-        # ========== HEADER ==========
+
+        # ── HEADER ──────────────────────────────────────
         header = tk.Frame(self.root, bg=COLORS['bg_card'], height=60)
         header.pack(fill='x', side='top')
         header.pack_propagate(False)
-        
+
         # Logo/Título
-        title_label = tk.Label(
+        tk.Label(
             header,
-            text="🏪 VENIALGO SISTEMAS",
+            text="🪪 VENIALGO SISTEMAS",
             font=(FONTS['family'], FONTS['title'], 'bold'),
             bg=COLORS['bg_card'],
             fg=COLORS['primary']
-        )
-        title_label.pack(side='left', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        # Información de sesión
-        info_label = tk.Label(
-            header,
-            text="Sistema de Punto de Venta Profesional",
-            font=(FONTS['family'], FONTS['small']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_secondary']
-        )
-        info_label.pack(side='right', padx=SPACING['lg'])
-        
-        # ========== CONTENEDOR PRINCIPAL ==========
+        ).pack(side='left', padx=SPACING['lg'], pady=SPACING['md'])
+
+        # Badge usuario/rol
+        rol   = self.current_user.get('rol', '')
+        nombre = self.current_user.get('nombre', '')
+        rol_colors = {
+            'Administrador': '#7c3aed',
+            'Supervisor':    '#0891b2',
+            'Cajero':        '#16a34a',
+        }
+        badge_bg = rol_colors.get(rol, COLORS['primary'])
+
+        badge_frm = tk.Frame(header, bg=COLORS['bg_card'])
+        badge_frm.pack(side='right', padx=SPACING['lg'])
+        tk.Label(badge_frm,
+                 text=f"👤 {nombre}",
+                 font=(FONTS['family'], FONTS['body']),
+                 bg=COLORS['bg_card'],
+                 fg=COLORS['text_secondary']).pack(side='left', padx=(0,6))
+        tk.Label(badge_frm,
+                 text=f" {rol} ",
+                 font=(FONTS['family'], FONTS['small'], 'bold'),
+                 bg=badge_bg, fg='white',
+                 padx=6, pady=2).pack(side='left')
+
+        # ── CONTENEDOR PRINCIPAL ─────────────────────────
         main_container = tk.Frame(self.root, bg=COLORS['bg_main'])
         main_container.pack(fill='both', expand=True)
-        
-        # ========== SIDEBAR (MENÚ) ==========
+
+        # ── SIDEBAR ──────────────────────────────────────
         self.sidebar = tk.Frame(
             main_container,
             bg=COLORS['bg_sidebar'],
@@ -106,30 +122,30 @@ class POSApp:
         )
         self.sidebar.pack(fill='y', side='left')
         self.sidebar.pack_propagate(False)
-        
-        # Título del menú
-        menu_title = tk.Label(
+
+        tk.Label(
             self.sidebar,
             text="MENÚ PRINCIPAL",
             font=(FONTS['family'], FONTS['body'], 'bold'),
             bg=COLORS['bg_sidebar'],
             fg=COLORS['text_white'],
             pady=SPACING['lg']
-        )
-        menu_title.pack(fill='x', padx=SPACING['md'])
-        
-        # Botones del menú
+        ).pack(fill='x', padx=SPACING['md'])
+
         self.menu_buttons = {}
-        
+
+        # Definir ítems con rol mínimo requerido
         menu_items = [
-            ("💰 Punto de Venta", self.show_sales_module, "sales"),
-            ("💳 Créditos", self.show_credits_module, "credits"),
-            ("📦 Productos", self.show_products_module, "products"),
-            ("👥 Clientes", self.show_customers_module, "customers"),
-            ("📊 Reportes", self.show_reports_module, "reports"),
+            ("💰 Punto de Venta",  self.show_sales_module,     "sales",     ["Administrador","Supervisor","Cajero"]),
+            ("💳 Créditos",         self.show_credits_module,   "credits",   ["Administrador","Supervisor","Cajero"]),
+            ("📦 Productos",        self.show_products_module,  "products",  ["Administrador","Supervisor"]),
+            ("👥 Clientes",         self.show_customers_module, "customers", ["Administrador","Supervisor"]),
+            ("📊 Reportes",         self.show_reports_module,   "reports",   ["Administrador","Supervisor"]),
         ]
-        
-        for text, command, key in menu_items:
+
+        for text, command, key, roles in menu_items:
+            if self.current_user.get('rol') not in roles:
+                continue
             btn = tk.Button(
                 self.sidebar,
                 text=text,
@@ -145,83 +161,132 @@ class POSApp:
             )
             btn.pack(fill='x', padx=SPACING['sm'], pady=2)
             self.menu_buttons[key] = btn
-            
-            # Efecto hover
             btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORS['primary']))
             btn.bind('<Leave>', lambda e, b=btn: b.config(bg=COLORS['bg_sidebar']))
-        
-        # ========== ÁREA DE CONTENIDO ==========
-        self.content_area = tk.Frame(
-            main_container,
-            bg=COLORS['bg_main']
+
+        # Separador + botón Administración (solo Administrador)
+        if self.current_user.get('rol') == 'Administrador':
+            sep_frm = tk.Frame(self.sidebar, bg=COLORS['bg_sidebar'])
+            sep_frm.pack(fill='x', padx=SPACING['md'], pady=(8, 4))
+            ttk.Separator(sep_frm).pack(fill='x')
+
+            btn_adm = tk.Button(
+                self.sidebar,
+                text="⚙️ Administración",
+                command=self.show_admin_module,
+                bg=COLORS['bg_sidebar'],
+                fg='#a78bfa',
+                font=(FONTS['family'], FONTS['body'], 'bold'),
+                relief='flat',
+                cursor='hand2',
+                anchor='w',
+                padx=SPACING['lg'],
+                pady=SPACING['md']
+            )
+            btn_adm.pack(fill='x', padx=SPACING['sm'], pady=2)
+            self.menu_buttons['admin'] = btn_adm
+            btn_adm.bind('<Enter>', lambda e: btn_adm.config(bg='#4c1d95'))
+            btn_adm.bind('<Leave>', lambda e: btn_adm.config(bg=COLORS['bg_sidebar']))
+
+        # Botón cerrar sesión al fondo del sidebar
+        tk.Frame(self.sidebar, bg=COLORS['bg_sidebar']).pack(fill='both', expand=True)
+        btn_logout = tk.Button(
+            self.sidebar,
+            text="🚪 Cerrar Sesión",
+            command=self._logout,
+            bg='#7f1d1d',
+            fg=COLORS['text_white'],
+            font=(FONTS['family'], FONTS['body'], 'bold'),
+            relief='flat',
+            cursor='hand2',
+            pady=SPACING['md']
         )
+        btn_logout.pack(fill='x', padx=SPACING['sm'], pady=(0, SPACING['sm']))
+        btn_logout.bind('<Enter>', lambda e: btn_logout.config(bg='#dc2626'))
+        btn_logout.bind('<Leave>', lambda e: btn_logout.config(bg='#7f1d1d'))
+
+        # ── ÁREA DE CONTENIDO ────────────────────────────
+        self.content_area = tk.Frame(main_container, bg=COLORS['bg_main'])
         self.content_area.pack(fill='both', expand=True, side='left')
-    
+
+        # ── FOOTER ───────────────────────────────────────
+        add_footer(self.root)
+
     def clear_content_area(self):
-        """Limpia el área de contenido"""
         for widget in self.content_area.winfo_children():
             widget.destroy()
-    
+
     def highlight_menu_button(self, active_key):
-        """Resalta el botón del menú activo"""
         for key, btn in self.menu_buttons.items():
             if key == active_key:
                 btn.config(bg=COLORS['primary'], fg=COLORS['text_white'])
             else:
-                btn.config(bg=COLORS['bg_sidebar'], fg=COLORS['text_white'])
-    
-    # ========== MÉTODOS PARA MOSTRAR MÓDULOS ==========
-    
+                fg = '#a78bfa' if key == 'admin' else COLORS['text_white']
+                btn.config(bg=COLORS['bg_sidebar'], fg=fg)
+
+    # ── MÓDULOS ──────────────────────────────────────────
+
     def show_sales_module(self):
-        """Muestra el módulo de punto de venta"""
         self.clear_content_area()
         self.highlight_menu_button('sales')
-        
-        # Importar y crear módulo de ventas
         from modules.sales.sale_ui import SalesModule
         SalesModule(self.content_area, self.db)
-    
+
     def show_credits_module(self):
-        """Muestra el módulo de gestión de créditos"""
         self.clear_content_area()
         self.highlight_menu_button('credits')
-        
-        # Importar y crear módulo de créditos
         from modules.credits.credit_ui import CreditsModule
         CreditsModule(self.content_area, self.db)
-    
+
     def show_products_module(self):
-        """Muestra el módulo de gestión de productos"""
         self.clear_content_area()
         self.highlight_menu_button('products')
-        
-        # Importar y crear módulo de productos
         from modules.products.product_ui import ProductModule
         ProductModule(self.content_area, self.db)
-    
+
     def show_customers_module(self):
-        """Muestra el módulo de gestión de clientes"""
         self.clear_content_area()
         self.highlight_menu_button('customers')
-        
-        # Importar y crear módulo de clientes
         from modules.customers.customer_ui import CustomerModule
         CustomerModule(self.content_area, self.db)
-    
+
     def show_reports_module(self):
-        """Muestra el módulo de reportes"""
         self.clear_content_area()
         self.highlight_menu_button('reports')
-        
-        # Importar y crear módulo de reportes
         from modules.reports.report_ui import ReportsModule
         ReportsModule(self.content_area, self.db)
 
-def main():
-    """Función principal"""
+    def show_admin_module(self):
+        """Módulo de administración — solo para Administradores."""
+        self.clear_content_area()
+        self.highlight_menu_button('admin')
+        from modules.admin.admin_ui import AdminModule
+        AdminModule(self.content_area, self.db, self.current_user)
+
+    # ── LOGOUT ───────────────────────────────────────────
+    def _logout(self):
+        if messagebox.askyesno("Cerrar Sesión",
+                               "¿Desea cerrar la sesión actual?"):
+            self.root.destroy()
+            main()  # Vuelve al login
+
+
+# ════════════════════════════════════════════════════════
+#  ENTRYPOINT
+# ════════════════════════════════════════════════════════
+def launch_pos(uid, nombre, rol):
+    """Lanza la ventana principal tras autenticación."""
     root = tk.Tk()
-    app = POSApp(root)
+    POSApp(root, current_user={"id": uid, "nombre": nombre, "rol": rol})
     root.mainloop()
+
+
+def main():
+    """Función principal — muestra login antes del POS."""
+    root = tk.Tk()
+    LoginWindow(root, on_success=launch_pos)
+    root.mainloop()
+
 
 if __name__ == "__main__":
     main()
