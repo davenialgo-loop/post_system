@@ -1,240 +1,275 @@
+# -*- coding: utf-8 -*-
 """
-Ventana de Login para el Sistema POS
+login_window.py — Venialgo Sistemas POS
+Diseño tipo imagen 2: tarjeta bicolor, header azul + cuerpo gris claro
 """
 
 import tkinter as tk
 from tkinter import messagebox
-import sqlite3
-import hashlib
+import sqlite3, hashlib, os, sys
 
-try:
-    from config.settings import COLORS, FONTS, SPACING
-except ImportError:
-    COLORS  = {'primary': '#2563eb', 'bg_card': '#ffffff',
-               'bg_main': '#f1f5f9', 'bg_sidebar': '#1e293b',
-               'text_white': '#ffffff', 'text_secondary': '#64748b',
-               'success': '#16a34a', 'danger': '#dc2626'}
-    FONTS   = {'family': 'Segoe UI', 'title': 16, 'subtitle': 13,
-               'body': 10, 'small': 9}
-    SPACING = {'xs': 4, 'sm': 8, 'md': 12, 'lg': 16, 'xl': 24}
+# ── Paleta ─────────────────────────────────────────────────────────────────
+C = {
+    "bg_outer":   "#0B1A3B",   # Fondo exterior azul muy oscuro
+    "card_top":   "#1A3468",   # Header de la tarjeta azul medio
+    "card_top2":  "#1E3A72",   # Gradiente header
+    "card_bot":   "#F0F3FA",   # Cuerpo gris azulado claro
+    "input_bg":   "#FFFFFF",
+    "input_brd":  "#D1D9EE",
+    "input_foc":  "#3B6FE0",
+    "btn_blue":   "#2F5FDB",
+    "btn_hover":  "#2450C8",
+    "btn_click":  "#1A3FA8",
+    "text_white": "#FFFFFF",
+    "text_sub":   "#A8BCD8",   # Subtítulo en header
+    "text_dark":  "#1A2B4A",
+    "text_label": "#4A5B7A",
+    "text_hint":  "#8A9BBF",
+    "footer_bg":  "#E4EAF5",
+    "footer_txt": "#6B7FA8",
+    "green_icon": "#2ECC40",
+}
+FONT = "Segoe UI"
 
-import os as _os, sys as _sys
-def _get_db_file():
-    if _sys.platform == "win32":
-        base = _os.environ.get("APPDATA", _os.path.expanduser("~"))
-    else:
-        base = _os.path.expanduser("~")
-    d = _os.path.join(base, "VenialgoPOS")
-    _os.makedirs(d, exist_ok=True)
-    return _os.path.join(d, "pos_database.db")
-DB_FILE = _get_db_file()
+# ── DB helpers ──────────────────────────────────────────────────────────────
+def _get_db():
+    base = os.environ.get("APPDATA", os.path.expanduser("~")) \
+           if sys.platform == "win32" else os.path.expanduser("~")
+    d = os.path.join(base, "VenialgoPOS")
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "pos_database.db")
 
 FOOTER_INFO = {
-    "empresa":  "Venialgo Sistemas",
     "email":    "davenialgo@proton.me",
     "whatsapp": "+595 994-686 493",
-    "web":      "www.venialgosistemas.com",   # Actualizar cuando esté disponible
 }
 
-
-def add_footer(window, bg_override=None):
-    """
-    Agrega el footer de Venialgo Sistemas a cualquier ventana.
-    Llámalo con: add_footer(self.root)
-    """
-    bg = bg_override or "#1e293b"
-    bar = tk.Frame(window, bg=bg, height=26)
-    bar.pack(side='bottom', fill='x')
-    bar.pack_propagate(False)
-    txt = (
-        f"  ★ {FOOTER_INFO['empresa']}  │  "
-        f"✉ {FOOTER_INFO['email']}  │  "
-        f"📱 WhatsApp: {FOOTER_INFO['whatsapp']}  │  "
-        f"🌐 {FOOTER_INFO['web']}  "
-    )
-    tk.Label(bar, text=txt, bg=bg, fg='#94a3b8',
-             font=(FONTS['family'], FONTS['small'])).pack(side='left')
-    return bar
-
-
 def verify_login(usuario, password):
-    """Verifica credenciales. Retorna (id, nombre, rol) o None."""
     hpwd = hashlib.sha256(password.encode()).hexdigest()
     try:
-        # Asegurar que las tablas existen antes de consultar
         from modules.admin.admin_ui import _ensure_tables
         _ensure_tables()
-        conn = sqlite3.connect(DB_FILE)
+    except Exception:
+        pass
+    try:
+        conn = sqlite3.connect(_get_db())
         c = conn.cursor()
-        c.execute("""SELECT id,nombre,rol FROM usuarios
-                     WHERE usuario=? AND password=? AND activo=1""",
-                  (usuario, hpwd))
+        c.execute("SELECT id,nombre,rol FROM usuarios "
+                  "WHERE usuario=? AND password=? AND activo=1", (usuario, hpwd))
         row = c.fetchone()
         conn.close()
         return row
-    except Exception as e:
-        print(f"Error login: {e}")
+    except Exception:
         return None
 
+# ── Input moderno ──────────────────────────────────────────────────────────
+class FlatEntry(tk.Frame):
+    def __init__(self, parent, show=None, **kw):
+        super().__init__(parent, bg=C["card_bot"], **kw)
+        self._border = tk.Frame(self, bg=C["input_brd"])
+        self._border.pack(fill='x', ipady=1)
+        inner = tk.Frame(self._border, bg=C["input_bg"])
+        inner.pack(fill='x', padx=1, pady=1)
+        self._show = show
+        self._var  = tk.StringVar()
+        self._e = tk.Entry(inner, textvariable=self._var,
+                           show=show or "",
+                           font=(FONT, 11),
+                           bg=C["input_bg"],
+                           fg=C["text_dark"],
+                           relief='flat', bd=0,
+                           insertbackground=C["btn_blue"])
+        self._e.pack(fill='x', padx=14, pady=10)
+        self._e.bind('<FocusIn>',  lambda _: self._border.config(bg=C["input_foc"]))
+        self._e.bind('<FocusOut>', lambda _: self._border.config(bg=C["input_brd"]))
 
+    def get(self):     return self._var.get()
+    def focus(self):   self._e.focus()
+
+# ── Botón hover ────────────────────────────────────────────────────────────
+class BlueBtn(tk.Label):
+    def __init__(self, parent, text, command, **kw):
+        super().__init__(parent, text=text,
+                         font=(FONT, 12, 'bold'),
+                         bg=C["btn_blue"], fg=C["text_white"],
+                         cursor='hand2', pady=14, **kw)
+        self._cmd = command
+        self.bind('<Enter>',          lambda _: self.config(bg=C["btn_hover"]))
+        self.bind('<Leave>',          lambda _: self.config(bg=C["btn_blue"]))
+        self.bind('<Button-1>',       lambda _: self.config(bg=C["btn_click"]))
+        self.bind('<ButtonRelease-1>',lambda _: (self.config(bg=C["btn_hover"]), self._cmd()))
+
+# ══════════════════════════════════════════════════════════════════════════════
 class LoginWindow:
-    """
-    Ventana de inicio de sesión.
-    Uso:
-        root = tk.Tk()
-        app  = LoginWindow(root, on_success_callback)
-        root.mainloop()
-
-    on_success_callback(uid, nombre, rol) se llama al autenticar.
-    """
+    W, H = 440, 600
 
     def __init__(self, root, on_success):
         self.root       = root
         self.on_success = on_success
-
-        self.root.title("Sistema POS - Iniciar Sesion")
-        self.root.geometry("420x580")
+        self.root.title("Venialgo Sistemas POS")
         self.root.resizable(False, False)
-        self.root.configure(bg=COLORS['bg_sidebar'])
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.configure(bg=C["bg_outer"])
+        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
         self._center()
         self._build()
 
-    def _on_close(self):
-        self.root.destroy()
-
     def _center(self):
         self.root.update_idletasks()
-        w, h = 420, 580
-        x = (self.root.winfo_screenwidth()  - w) // 2
-        y = (self.root.winfo_screenheight() - h) // 2
-        self.root.geometry(f"{w}x{h}+{x}+{y}")
-
-    def _load_logo(self):
-        """Carga el logo desde assets o ruta del ejecutable."""
-        import os, sys
-        logo_paths = [
-            os.path.join(os.path.dirname(sys.executable), "assets", "VenialgoSistemasLogo.png"),
-            os.path.join(os.path.dirname(__file__), "..", "..", "assets", "VenialgoSistemasLogo.png"),
-            os.path.join(os.path.dirname(__file__), "VenialgoSistemasLogo.png"),
-            "assets/VenialgoSistemasLogo.png",
-            "VenialgoSistemasLogo.png",
-        ]
-        for path in logo_paths:
-            if os.path.exists(path):
-                return path
-        return None
+        x = (self.root.winfo_screenwidth()  - self.W) // 2
+        y = (self.root.winfo_screenheight() - self.H) // 2
+        self.root.geometry(f"{self.W}x{self.H}+{x}+{y}")
 
     def _build(self):
-        # ── Encabezado con logo ───────────────────────
-        top = tk.Frame(self.root, bg=COLORS['bg_sidebar'])
-        top.pack(fill='x', pady=(24, 12))
+        # Tarjeta ocupa toda la ventana
+        self.root.configure(bg=C["card_top"])
+        card = tk.Frame(self.root, bg=C["card_top"])
+        card.pack(fill='both', expand=True)
 
-        # Intentar cargar imagen del logo
-        logo_path = self._load_logo()
-        logo_loaded = False
+        self._build_header(card)
+        self._build_body(card)
+        self.root.bind('<Return>', lambda e: self._login())
+
+    def _build_header(self, card):
+        """Sección azul oscura con logo y título."""
+        top = tk.Frame(card, bg=C["card_top"])
+        top.pack(fill='x')
+
+        # Logo
+        logo_frame = tk.Frame(top, bg=C["card_top"])
+        logo_frame.pack(pady=(28, 8))
+
+        self._logo_img = None
+        logo_path = self._find_logo()
+        logo_ok = False
+
         if logo_path:
             try:
                 from PIL import Image, ImageTk
                 img = Image.open(logo_path).convert("RGBA")
-                # Redimensionar manteniendo proporción, máx 120x120
-                img.thumbnail((120, 120), Image.LANCZOS)
-                # Fondo transparente → color del sidebar
-                bg_img = Image.new("RGBA", img.size, (30, 41, 59, 255))
+                img.thumbnail((110, 110), Image.LANCZOS)
+                bg_img = Image.new("RGBA", img.size,
+                                   tuple(int(C["card_top"].lstrip('#')[i:i+2],16)
+                                         for i in (0,2,4)) + (255,))
                 bg_img.paste(img, mask=img.split()[3])
                 self._logo_img = ImageTk.PhotoImage(bg_img.convert("RGB"))
-                tk.Label(top, image=self._logo_img,
-                         bg=COLORS['bg_sidebar']).pack()
-                logo_loaded = True
-            except ImportError:
-                # PIL no disponible, usar tkinter PhotoImage para PNG
+                tk.Label(logo_frame, image=self._logo_img,
+                         bg=C["card_top"]).pack()
+                logo_ok = True
+            except Exception:
                 try:
                     self._logo_img = tk.PhotoImage(file=logo_path)
-                    # Escalar si es muy grande
-                    orig_w = self._logo_img.width()
-                    if orig_w > 120:
-                        factor = orig_w // 120 + 1
-                        self._logo_img = self._logo_img.subsample(factor, factor)
-                    tk.Label(top, image=self._logo_img,
-                             bg=COLORS['bg_sidebar']).pack()
-                    logo_loaded = True
+                    w = self._logo_img.width()
+                    if w > 110:
+                        f = max(1, w // 110)
+                        self._logo_img = self._logo_img.subsample(f, f)
+                    tk.Label(logo_frame, image=self._logo_img,
+                             bg=C["card_top"]).pack()
+                    logo_ok = True
                 except Exception:
                     pass
-            except Exception:
-                pass
 
-        if not logo_loaded:
-            # Fallback: texto si no hay imagen
-            tk.Label(top, text="🏪",
-                     font=(FONTS['family'], 48),
-                     bg=COLORS['bg_sidebar'],
-                     fg=COLORS['text_white']).pack()
+        if not logo_ok:
+            tk.Label(logo_frame, text="V",
+                     font=(FONT, 32, 'bold'),
+                     bg="#2451B5", fg="white",
+                     width=3, pady=10).pack()
 
+        # Nombre app
         tk.Label(top, text="Venialgo Sistemas POS",
-                 font=(FONTS['family'], FONTS['body'], 'bold'),
-                 bg=COLORS['bg_sidebar'],
-                 fg=COLORS['text_white']).pack(pady=(6, 0))
+                 font=(FONT, 14, 'bold'),
+                 bg=C["card_top"], fg=C["text_white"]).pack(pady=(8, 3))
         tk.Label(top, text="Inicie sesión para continuar",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg=COLORS['bg_sidebar'],
-                 fg='#94a3b8').pack()
+                 font=(FONT, 9),
+                 bg=C["card_top"], fg=C["text_sub"]).pack(pady=(0, 24))
 
-        # ── Card blanca ──────────────────────────────
-        card = tk.Frame(self.root, bg=COLORS['bg_card'],
-                        padx=32, pady=28)
-        card.pack(fill='both', expand=True, padx=28, pady=8)
+    def _build_body(self, card):
+        """Sección gris clara con formulario."""
+        body = tk.Frame(card, bg=C["card_bot"])
+        body.pack(fill='both', expand=True)
 
-        # Usuario
-        tk.Label(card, text="Usuario",
-                 font=(FONTS['family'], FONTS['body'], 'bold'),
-                 bg=COLORS['bg_card'], fg='#374151').pack(anchor='w')
-        self._var_usr = tk.StringVar()
-        tk.Entry(card, textvariable=self._var_usr,
-                 font=(FONTS['family'], 11),
-                 relief='solid', bd=1).pack(fill='x', pady=(3,14))
+        form = tk.Frame(body, bg=C["card_bot"], padx=36)
+        form.pack(fill='x', pady=(28, 0))
 
-        # Contraseña
-        tk.Label(card, text="Contraseña",
-                 font=(FONTS['family'], FONTS['body'], 'bold'),
-                 bg=COLORS['bg_card'], fg='#374151').pack(anchor='w')
-        self._var_pwd = tk.StringVar()
-        tk.Entry(card, textvariable=self._var_pwd,
-                 show='●', font=(FONTS['family'], 11),
-                 relief='solid', bd=1).pack(fill='x', pady=(3,22))
+        # ── Usuario ───────────────────────────────────────────
+        row_u = tk.Frame(form, bg=C["card_bot"])
+        row_u.pack(fill='x', pady=(0, 4))
+        tk.Label(row_u, text="👤", bg=C["card_bot"],
+                 font=(FONT, 11)).pack(side='left', padx=(0,6))
+        tk.Label(row_u, text="Usuario",
+                 font=(FONT, 10, 'bold'),
+                 bg=C["card_bot"], fg=C["text_label"]).pack(side='left')
 
-        # Botón
-        btn = tk.Button(card, text="INGRESAR",
-                        command=self._login,
-                        bg=COLORS['primary'],
-                        fg=COLORS['text_white'],
-                        font=(FONTS['family'], 11, 'bold'),
-                        relief='flat', pady=10, cursor='hand2')
-        btn.pack(fill='x')
+        self._entry_usr = FlatEntry(form)
+        self._entry_usr.pack(fill='x', pady=(0, 18))
+        self._entry_usr.focus()
 
-        tk.Label(card,
-                 text="Usuario por defecto: admin / admin123",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg=COLORS['bg_card'], fg='#cbd5e1').pack(pady=(12,0))
+        # ── Contraseña ────────────────────────────────────────
+        row_p = tk.Frame(form, bg=C["card_bot"])
+        row_p.pack(fill='x', pady=(0, 4))
+        tk.Label(row_p, text="🔒", bg=C["card_bot"],
+                 font=(FONT, 11)).pack(side='left', padx=(0,6))
+        tk.Label(row_p, text="Contraseña",
+                 font=(FONT, 10, 'bold'),
+                 bg=C["card_bot"], fg=C["text_label"]).pack(side='left')
 
-        # Footer
-        add_footer(self.root)
-        self.root.bind('<Return>', lambda e: self._login())
+        self._entry_pwd = FlatEntry(form, show="●")
+        self._entry_pwd.pack(fill='x', pady=(0, 22))
+
+        # ── Botón ─────────────────────────────────────────────
+        BlueBtn(form, text="✅  INGRESAR",
+                command=self._login).pack(fill='x')
+
+        # ── Hint ──────────────────────────────────────────────
+        tk.Label(body,
+                 text="Usuario por defecto:  admin  /  admin123",
+                 font=(FONT, 8), bg=C["card_bot"],
+                 fg=C["text_hint"]).pack(pady=(14, 0))
+
+        # ── Footer dentro de tarjeta ──────────────────────────
+        footer = tk.Frame(body, bg=C["footer_bg"])
+        footer.pack(fill='x', side='bottom', pady=(18, 0))
+        tk.Frame(body, bg="#C8D4EE", height=1).pack(fill='x', side='bottom')
+
+        txt = (f"  ✉  {FOOTER_INFO['email']}"
+               f"   |   📱  WhatsApp: {FOOTER_INFO['whatsapp']}  ")
+        tk.Label(footer, text=txt,
+                 font=(FONT, 8), bg=C["footer_bg"],
+                 fg=C["footer_txt"]).pack(pady=8)
+
+    def _find_logo(self):
+        paths = [
+            os.path.join(os.path.dirname(sys.executable), "assets", "VenialgoSistemasLogo.png"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "VenialgoSistemasLogo.png"),
+            "assets/VenialgoSistemasLogo.png",
+            "VenialgoSistemasLogo.png",
+        ]
+        for p in paths:
+            try:
+                if os.path.exists(p): return p
+            except Exception: pass
+        return None
 
     def _login(self):
-        usr = self._var_usr.get().strip()
-        pwd = self._var_pwd.get().strip()
+        usr = self._entry_usr.get().strip()
+        pwd = self._entry_pwd.get().strip()
         if not usr or not pwd:
-            messagebox.showwarning("Atención",
-                                   "Complete usuario y contraseña.")
-            return
+            self._shake(); return
         result = verify_login(usr, pwd)
         if result:
             uid, nombre, rol = result
             self.root.destroy()
             self.on_success(uid, nombre, rol)
         else:
-            messagebox.showerror("Error de acceso",
-                "Credenciales incorrectas o usuario inactivo.\n\n"
-                "Usuario por defecto: admin\n"
-                "Contrasena por defecto: admin123",
+            self._shake()
+            messagebox.showerror("Acceso denegado",
+                "Usuario o contraseña incorrectos.\n\n"
+                "Por defecto:  admin  /  admin123",
                 parent=self.root)
+
+    def _shake(self):
+        ox = self.root.winfo_x()
+        oy = self.root.winfo_y()
+        for d in [10,-10,8,-8,5,-5,3,-3,0]:
+            self.root.geometry(f"{self.W}x{self.H}+{ox+d}+{oy}")
+            self.root.update()
+            self.root.after(20)
