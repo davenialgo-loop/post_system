@@ -47,7 +47,14 @@ def _get_logo_dir():
     os.makedirs(d, exist_ok=True)
     return d
 LOGO_DIR = Path(_get_logo_dir())
-FIRST_RUN_FLAG = ".first_run_done"
+def _get_first_run_flag():
+    import sys
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    else:
+        base = os.path.expanduser("~")
+    return os.path.join(base, "VenialgoPOS", ".first_run_done")
+FIRST_RUN_FLAG = _get_first_run_flag()
 
 FOOTER_INFO = {
     "empresa":  "Venialgo Sistemas",
@@ -82,19 +89,29 @@ def is_first_run() -> bool:
 
 
 def _mark_done():
-    with open(FIRST_RUN_FLAG, 'w') as f:
-        f.write("done")
+    try:
+        os.makedirs(os.path.dirname(FIRST_RUN_FLAG), exist_ok=True)
+        with open(FIRST_RUN_FLAG, 'w') as f:
+            f.write("done")
+    except Exception as e:
+        print(f"Aviso _mark_done: {e}")
 
 
 def save_company_data(data: dict) -> bool:
     """
     Guarda datos de empresa en la BD (AppData/VenialgoPOS/pos_database.db)
     """
+    import traceback
     try:
+        # Asegurar que el directorio existe
+        db_dir = os.path.dirname(DB_FILE)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
 
-        # Crear tabla si no existe
+        # Eliminar y recrear tabla empresa con todas las columnas
         c.execute("""
             CREATE TABLE IF NOT EXISTS empresa (
                 id           INTEGER PRIMARY KEY,
@@ -107,48 +124,56 @@ def save_company_data(data: dict) -> bool:
             )
         """)
 
-        # Asegurar columna logo_path existe
+        # Agregar columna logo_path si no existe
         try:
             c.execute("ALTER TABLE empresa ADD COLUMN logo_path TEXT DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass
+        except Exception:
+            pass  # Ya existe, ignorar
 
-        # Verificar si existe registro
+        # Verificar si existe registro id=1
         c.execute("SELECT COUNT(*) FROM empresa WHERE id=1")
         existe = c.fetchone()[0] > 0
+
+        vals = (
+            data.get("razon_social", ""),
+            data.get("ruc", ""),
+            data.get("telefono", ""),
+            data.get("direccion", ""),
+            data.get("correo", ""),
+            data.get("logo_path", ""),
+        )
 
         if existe:
             c.execute("""
                 UPDATE empresa
-                SET razon_social=?, ruc=?, telefono=?, direccion=?, correo=?, logo_path=?
+                SET razon_social=?, ruc=?, telefono=?,
+                    direccion=?, correo=?, logo_path=?
                 WHERE id=1
-            """, (
-                data.get("razon_social",""),
-                data.get("ruc",""),
-                data.get("telefono",""),
-                data.get("direccion",""),
-                data.get("correo",""),
-                data.get("logo_path",""),
-            ))
+            """, vals)
         else:
             c.execute("""
-                INSERT INTO empresa (id,razon_social,ruc,telefono,direccion,correo,logo_path)
-                VALUES (1,?,?,?,?,?,?)
-            """, (
-                data.get("razon_social",""),
-                data.get("ruc",""),
-                data.get("telefono",""),
-                data.get("direccion",""),
-                data.get("correo",""),
-                data.get("logo_path",""),
-            ))
+                INSERT INTO empresa
+                    (id, razon_social, ruc, telefono, direccion, correo, logo_path)
+                VALUES (1, ?, ?, ?, ?, ?, ?)
+            """, vals)
 
         conn.commit()
         conn.close()
-        _mark_done()
+        _mark_done()  # No bloquea aunque falle (tiene try/except interno)
         return True
+
     except Exception as e:
-        print(f"Error guardando empresa: {e}")
+        err = traceback.format_exc()
+        print(f"[ERROR save_company_data]\n{err}")
+        # Guardar log para diagnostico
+        try:
+            log_path = os.path.join(os.path.dirname(DB_FILE), "error_log.txt")
+            with open(log_path, "a", encoding="utf-8") as lf:
+                lf.write(f"\n--- save_company_data error ---\n{err}\n")
+                lf.write(f"DB_FILE = {DB_FILE}\n")
+                lf.write(f"data = {data}\n")
+        except Exception:
+            pass
         return False
 
 
@@ -638,6 +663,10 @@ class FirstRunWizard:
             self.win.destroy()
             self.on_complete()
         else:
-            messagebox.showerror("Error",
-                "No se pudieron guardar los datos. Intente nuevamente.",
+            # Mostrar ruta del log para diagnostico
+            import os as _os2
+            log = _os2.path.join(_os2.path.dirname(DB_FILE), "error_log.txt")
+            messagebox.showerror("Error al guardar",
+                f"No se pudieron guardar los datos.\n\n"
+                f"Revise el archivo de log:\n{log}",
                 parent=self.win)

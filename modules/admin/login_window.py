@@ -93,7 +93,7 @@ class LoginWindow:
         self.on_success = on_success
 
         self.root.title("Sistema POS - Iniciar Sesion")
-        self.root.geometry("420x540")
+        self.root.geometry("420x580")
         self.root.resizable(False, False)
         self.root.configure(bg=COLORS['bg_sidebar'])
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -105,23 +105,75 @@ class LoginWindow:
 
     def _center(self):
         self.root.update_idletasks()
-        w, h = 420, 540
+        w, h = 420, 580
         x = (self.root.winfo_screenwidth()  - w) // 2
         y = (self.root.winfo_screenheight() - h) // 2
         self.root.geometry(f"{w}x{h}+{x}+{y}")
 
+    def _load_logo(self):
+        """Carga el logo desde assets o ruta del ejecutable."""
+        import os, sys
+        logo_paths = [
+            os.path.join(os.path.dirname(sys.executable), "assets", "VenialgoSistemasLogo.png"),
+            os.path.join(os.path.dirname(__file__), "..", "..", "assets", "VenialgoSistemasLogo.png"),
+            os.path.join(os.path.dirname(__file__), "VenialgoSistemasLogo.png"),
+            "assets/VenialgoSistemasLogo.png",
+            "VenialgoSistemasLogo.png",
+        ]
+        for path in logo_paths:
+            if os.path.exists(path):
+                return path
+        return None
+
     def _build(self):
-        # ── Encabezado azul ──────────────────────────
+        # ── Encabezado con logo ───────────────────────
         top = tk.Frame(self.root, bg=COLORS['bg_sidebar'])
-        top.pack(fill='x', pady=(40, 20))
-        tk.Label(top, text="🏪",
-                 font=(FONTS['family'], 52),
+        top.pack(fill='x', pady=(24, 12))
+
+        # Intentar cargar imagen del logo
+        logo_path = self._load_logo()
+        logo_loaded = False
+        if logo_path:
+            try:
+                from PIL import Image, ImageTk
+                img = Image.open(logo_path).convert("RGBA")
+                # Redimensionar manteniendo proporción, máx 120x120
+                img.thumbnail((120, 120), Image.LANCZOS)
+                # Fondo transparente → color del sidebar
+                bg_img = Image.new("RGBA", img.size, (30, 41, 59, 255))
+                bg_img.paste(img, mask=img.split()[3])
+                self._logo_img = ImageTk.PhotoImage(bg_img.convert("RGB"))
+                tk.Label(top, image=self._logo_img,
+                         bg=COLORS['bg_sidebar']).pack()
+                logo_loaded = True
+            except ImportError:
+                # PIL no disponible, usar tkinter PhotoImage para PNG
+                try:
+                    self._logo_img = tk.PhotoImage(file=logo_path)
+                    # Escalar si es muy grande
+                    orig_w = self._logo_img.width()
+                    if orig_w > 120:
+                        factor = orig_w // 120 + 1
+                        self._logo_img = self._logo_img.subsample(factor, factor)
+                    tk.Label(top, image=self._logo_img,
+                             bg=COLORS['bg_sidebar']).pack()
+                    logo_loaded = True
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+        if not logo_loaded:
+            # Fallback: texto si no hay imagen
+            tk.Label(top, text="🏪",
+                     font=(FONTS['family'], 48),
+                     bg=COLORS['bg_sidebar'],
+                     fg=COLORS['text_white']).pack()
+
+        tk.Label(top, text="Venialgo Sistemas POS",
+                 font=(FONTS['family'], FONTS['body'], 'bold'),
                  bg=COLORS['bg_sidebar'],
-                 fg=COLORS['text_white']).pack()
-        tk.Label(top, text="Sistema POS",
-                 font=(FONTS['family'], FONTS['title'], 'bold'),
-                 bg=COLORS['bg_sidebar'],
-                 fg=COLORS['text_white']).pack()
+                 fg=COLORS['text_white']).pack(pady=(6, 0))
         tk.Label(top, text="Inicie sesión para continuar",
                  font=(FONTS['family'], FONTS['small']),
                  bg=COLORS['bg_sidebar'],

@@ -278,6 +278,10 @@ class CreditsModule:
         details_window = tk.Toplevel(self.parent)
         details_window.title(f"Detalles del Crédito #{credit['id']}")
         details_window.geometry("500x400")
+        details_window.update_idletasks()
+        _sw = details_window.winfo_screenwidth()
+        _sh = details_window.winfo_screenheight()
+        details_window.geometry(f"500x400+{(_sw-500)//2}+{(_sh-400)//2}")
         details_window.configure(bg=COLORS['bg_card'])
         details_window.transient(self.parent)
         
@@ -328,11 +332,19 @@ class CreditsModule:
         dialog = tk.Toplevel(self.parent)
         dialog.title("Registrar Pago")
         dialog.geometry("400x350")
+        dialog.update_idletasks()
+        _sw = dialog.winfo_screenwidth()
+        _sh = dialog.winfo_screenheight()
+        dialog.geometry(f"400x350+{(_sw-400)//2}+{(_sh-350)//2}")
         dialog.configure(bg=COLORS['bg_card'])
         dialog.transient(self.parent)
         dialog.grab_set()
         
         # Contenido
+        # Botones PRIMERO para reservar espacio inferior
+        buttons_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        buttons_frame.pack(fill='x', side='bottom')
+
         form_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
         form_frame.pack(fill='both', expand=True)
         
@@ -388,9 +400,6 @@ class CreditsModule:
         entry_notes.pack(fill='x', pady=(0, SPACING['lg']))
         
         # Botones
-        buttons_frame = tk.Frame(form_frame, bg=COLORS['bg_card'])
-        buttons_frame.pack(fill='x')
-        
         def register_payment():
             try:
                 amount = float(entry_amount.get())
@@ -448,6 +457,10 @@ class CreditsModule:
         history_window = tk.Toplevel(self.parent)
         history_window.title(f"Historial de Pagos - {credit['customer_name']}")
         history_window.geometry("700x500")
+        history_window.update_idletasks()
+        _sw = history_window.winfo_screenwidth()
+        _sh = history_window.winfo_screenheight()
+        history_window.geometry(f"700x500+{(_sw-700)//2}+{(_sh-500)//2}")
         history_window.configure(bg=COLORS['bg_card'])
         history_window.transient(self.parent)
         
@@ -529,10 +542,18 @@ class CreditsModule:
         dialog = tk.Toplevel(self.parent)
         dialog.title("Cambiar Fecha de Pago")
         dialog.geometry("400x250")
+        dialog.update_idletasks()
+        _sw = dialog.winfo_screenwidth()
+        _sh = dialog.winfo_screenheight()
+        dialog.geometry(f"400x250+{(_sw-400)//2}+{(_sh-250)//2}")
         dialog.configure(bg=COLORS['bg_card'])
         dialog.transient(self.parent)
         dialog.grab_set()
         
+        # Botones PRIMERO para reservar espacio inferior
+        buttons_frame_date = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        buttons_frame_date.pack(fill='x', side='bottom')
+
         form_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
         form_frame.pack(fill='both', expand=True)
         
@@ -565,9 +586,6 @@ class CreditsModule:
         entry_date.insert(0, credit['next_payment_date'])
         entry_date.focus()
         
-        buttons_frame = tk.Frame(form_frame, bg=COLORS['bg_card'])
-        buttons_frame.pack(fill='x')
-        
         def update_date():
             try:
                 new_date = entry_date.get()
@@ -584,18 +602,7 @@ class CreditsModule:
             except Exception as e:
                 messagebox.showerror("Error", f"Error al actualizar: {str(e)}")
         
-        btn_save = tk.Button(
-            buttons_frame,
-            text="💾 Actualizar",
-            command=update_date,
-            **BUTTON_STYLES['success']
-        )
-        btn_save.pack(side='left', padx=SPACING['sm'])
-        
-        btn_cancel = tk.Button(
-            buttons_frame,
-            text="❌ Cancelar",
-            command=dialog.destroy,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_cancel.pack(side='left', padx=SPACING['sm'])
+        tk.Button(buttons_frame_date, text="💾 Actualizar", command=update_date,
+                 **BUTTON_STYLES['success']).pack(side='left', padx=SPACING['sm'])
+        tk.Button(buttons_frame_date, text="❌ Cancelar", command=dialog.destroy,
+                 **BUTTON_STYLES['secondary']).pack(side='left', padx=SPACING['sm'])

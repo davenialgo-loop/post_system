@@ -216,6 +216,10 @@ class SalesModule:
         dialog = tk.Toplevel(self.parent)
         dialog.title("Finalizar Venta")
         dialog.geometry("520x700")
+        dialog.update_idletasks()
+        _sw = dialog.winfo_screenwidth()
+        _sh = dialog.winfo_screenheight()
+        dialog.geometry(f"520x700+{(_sw-520)//2}+{(_sh-700)//2}")
         dialog.configure(bg='white')
         dialog.transient(self.parent)
         dialog.grab_set()
@@ -372,6 +376,10 @@ class SalesModule:
         ticket_window = tk.Toplevel(self.parent)
         ticket_window.title(f"Ticket #{sale_id}")
         ticket_window.geometry("450x600")
+        ticket_window.update_idletasks()
+        _sw = ticket_window.winfo_screenwidth()
+        _sh = ticket_window.winfo_screenheight()
+        ticket_window.geometry(f"450x600+{(_sw-450)//2}+{(_sh-600)//2}")
         ticket_window.configure(bg='white')
         
         ticket_data = {

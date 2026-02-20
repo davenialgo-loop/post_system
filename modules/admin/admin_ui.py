@@ -237,10 +237,11 @@ class AdminModule:
     current_user = dict con keys: id, nombre, rol
     """
 
-    def __init__(self, parent, db, current_user=None):
+    def __init__(self, parent, db, current_user=None, on_company_saved=None):
         self.parent = parent
         self.db     = db
         self.current_user = current_user or {"id": 0, "nombre": "Admin", "rol": "Administrador"}
+        self.on_company_saved = on_company_saved
 
         _ensure_tables()
         self._build()
@@ -316,12 +317,14 @@ class AdminModule:
     def _save_empresa(self):
         data = {k: v.get().strip() for k,v in self._emp_vars.items()}
         if not data['razon_social'] or not data['ruc']:
-            messagebox.showwarning("Atención",
-                                   "Razón Social y RUC son obligatorios.")
+            messagebox.showwarning("Atencion",
+                                   "Razon Social y RUC son obligatorios.")
             return
         _save_empresa(data)
-        messagebox.showinfo("✅ Guardado",
+        messagebox.showinfo("Guardado",
                             "Datos de empresa guardados correctamente.")
+        if self.on_company_saved:
+            self.on_company_saved()
 
     # ════════════════════════════════════════════════════
     #  TAB 2 — USUARIOS

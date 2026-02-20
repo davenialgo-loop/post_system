@@ -176,7 +176,11 @@ class ProductModule:
         """Muestra diálogo para agregar o editar producto"""
         dialog = tk.Toplevel(self.parent)
         dialog.title("Nuevo Producto" if mode == 'add' else "Editar Producto")
-        dialog.geometry("520x600")
+        dialog.geometry("560x820")
+        dialog.update_idletasks()
+        _sw = dialog.winfo_screenwidth()
+        _sh = dialog.winfo_screenheight()
+        dialog.geometry(f"560x820+{(_sw-560)//2}+{(_sh-820)//2}")
         dialog.resizable(False, False)
         dialog.configure(bg=COLORS['bg_card'])
         dialog.transient(self.parent)
@@ -188,7 +192,11 @@ class ProductModule:
         
         main_container = tk.Frame(dialog, bg=COLORS['bg_card'])
         main_container.pack(fill='both', expand=True)
-        
+
+        # Botones primero para reservar espacio en bottom
+        buttons_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
+        buttons_frame.pack(fill='x', side='bottom')
+
         form_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
         form_frame.pack(fill='both', expand=True)
         
@@ -208,7 +216,20 @@ class ProductModule:
             entry_name.insert(0, product_data['name'])
         entry_name.focus()
         
-        tk.Label(form_frame, text="Precio*", font=(FONTS['family'], FONTS['body']),
+        # ── Precio de Costo ──────────────────────────────────
+        tk.Label(form_frame, text="Precio de Costo*",
+                font=(FONTS['family'], FONTS['body'], 'bold'),
+                bg=COLORS['bg_card'], fg='#d97706').pack(anchor='w', pady=(0, 5))
+        entry_cost = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
+        entry_cost.pack(fill='x', pady=(0, SPACING['md']))
+        if product_data:
+            entry_cost.insert(0, str(int(product_data.get('cost', product_data.get('costo', 0)))))
+        else:
+            entry_cost.insert(0, "0")
+
+        # ── Precio de Venta (calculado o manual) ─────────────
+        tk.Label(form_frame, text="Precio Contado (se calcula automaticamente)",
+                font=(FONTS['family'], FONTS['body']),
                 bg=COLORS['bg_card'], fg=COLORS['text_primary']).pack(anchor='w', pady=(0, 5))
         entry_price = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']))
         entry_price.pack(fill='x', pady=(0, SPACING['md']))
@@ -237,10 +258,55 @@ class ProductModule:
         entry_barcode.pack(fill='x', pady=(0, SPACING['md']))
         if product_data:
             entry_barcode.insert(0, product_data['barcode'] or '')
-        
-        buttons_frame = tk.Frame(main_container, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
-        buttons_frame.pack(fill='x', side='bottom')
-        
+
+        # ── Tabla precios calculados ──────────────────────────
+        tk.Label(form_frame, text="Tabla de Precios por Modalidad",
+                font=(FONTS['family'], FONTS['body'], 'bold'),
+                bg=COLORS['bg_card'], fg='#2563eb').pack(anchor='w', pady=(SPACING['md'],4))
+
+        cols_p = ("Modalidad", "Ganancia", "Precio Venta", "Cuota")
+        tree_prices = ttk.Treeview(form_frame, columns=cols_p, show='headings', height=5)
+        for col, w in zip(cols_p, [120, 75, 110, 100]):
+            tree_prices.heading(col, text=col)
+            tree_prices.column(col, width=w, anchor='center')
+        tree_prices.tag_configure('contado', background='#f0fdf4', foreground='#166534')
+        tree_prices.tag_configure('credito', background='#eff6ff', foreground='#1e40af')
+        tree_prices.pack(fill='x', pady=(0, SPACING['sm']))
+
+        def _update_prices_table(*args):
+            try:
+                costo_val = float(entry_cost.get().replace(',','').replace('.','') or 0)
+            except ValueError:
+                return
+            for row in tree_prices.get_children():
+                tree_prices.delete(row)
+            if not costo_val:
+                return
+            try:
+                precios = self.db.calcular_precios_producto(costo_val)
+                for p in precios:
+                    cuota_txt = f"Gs. {p['cuota_monto']:,.0f}" if p['cuota_monto'] else "-"
+                    tag = 'contado' if p['tipo'] == 'contado' else 'credito'
+                    tree_prices.insert('', 'end', values=(
+                        p['nombre'],
+                        f"{p['porcentaje']:.0f}%",
+                        f"Gs. {p['precio']:,.0f}",
+                        cuota_txt,
+                    ), tags=(tag,))
+                    # Autocompletar precio contado
+                    if p['tipo'] == 'contado' and not entry_price.get():
+                        entry_price.delete(0, 'end')
+                        entry_price.insert(0, str(int(p['precio'])))
+            except Exception:
+                pass
+
+        entry_cost.bind('<FocusOut>', _update_prices_table)
+        entry_cost.bind('<Return>',   _update_prices_table)
+
+        # Cargar precios si estamos editando
+        if product_data and product_data.get('cost', product_data.get('costo', 0)):
+            form_frame.after(100, _update_prices_table)
+
         def save_product():
             is_valid, msg, name = validate_required_field(entry_name.get(), "Nombre")
             if not is_valid:
@@ -260,13 +326,19 @@ class ProductModule:
             category = entry_category.get().strip()
             barcode = entry_barcode.get().strip()
             
+            # Obtener costo
+            try:
+                cost = float(entry_cost.get().replace(',','').replace('.','') or 0)
+            except ValueError:
+                cost = 0
+
             try:
                 if mode == 'add':
-                    self.db.add_product(name, price, stock, category, barcode)
-                    messagebox.showinfo("Éxito", "Producto agregado correctamente")
+                    self.db.add_product(name, price, stock, category, barcode, costo=cost)
+                    messagebox.showinfo("Exito", "Producto agregado correctamente")
                 else:
-                    self.db.update_product(product_id, name, price, stock, category, barcode)
-                    messagebox.showinfo("Éxito", "Producto actualizado correctamente")
+                    self.db.update_product(product_id, name, price, stock, category, barcode, costo=cost)
+                    messagebox.showinfo("Exito", "Producto actualizado correctamente")
                 
                 self.load_products()
                 dialog.destroy()

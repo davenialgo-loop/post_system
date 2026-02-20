@@ -33,6 +33,8 @@ Name: "desktopicon"; Description: "Create desktop icon"
 [Files]
 Source: "..\dist\POS\POS.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\POS\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\assets\VenialgoSistemasLogo.png"; DestDir: "{app}\assets"; Flags: ignoreversion
+
 
 [Dirs]
 Name: "{app}\backups"

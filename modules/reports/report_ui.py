@@ -299,6 +299,10 @@ class ReportsModule:
         details_window = tk.Toplevel(self.parent)
         details_window.title(f"Detalles de Venta #{sale_id}")
         details_window.geometry("600x400")
+        details_window.update_idletasks()
+        _sw = details_window.winfo_screenwidth()
+        _sh = details_window.winfo_screenheight()
+        details_window.geometry(f"600x400+{(_sw-600)//2}+{(_sh-400)//2}")
         details_window.configure(bg=COLORS['bg_card'])
         details_window.transient(self.parent)
         

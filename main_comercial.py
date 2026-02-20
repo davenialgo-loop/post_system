@@ -165,8 +165,25 @@ class POSApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.setup_styles()
-        self.create_layout()
-        self.show_sales_module()
+        try:
+            self.create_layout()
+        except Exception as e:
+            import traceback
+            err = traceback.format_exc()
+            tk.Label(self.root, text=f"ERROR en layout:\n{err}",
+                     bg="white", fg="red", justify="left",
+                     font=("Courier New", 9),
+                     wraplength=900).pack(padx=20, pady=20)
+            return
+        try:
+            self.show_sales_module()
+        except Exception as e:
+            import traceback
+            err = traceback.format_exc()
+            tk.Label(self.root, text=f"ERROR en modulo ventas:\n{err}",
+                     bg="white", fg="red", justify="left",
+                     font=("Courier New", 9),
+                     wraplength=900).pack(padx=20, pady=20)
 
     # ── Estilos ───────────────────────────────────────────────
     def setup_styles(self):

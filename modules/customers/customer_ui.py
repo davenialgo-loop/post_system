@@ -169,6 +169,10 @@ class CustomerModule:
         dialog = tk.Toplevel(self.parent)
         dialog.title("Nuevo Cliente" if mode == 'add' else "Editar Cliente")
         dialog.geometry("520x580")
+        dialog.update_idletasks()
+        _sw = dialog.winfo_screenwidth()
+        _sh = dialog.winfo_screenheight()
+        dialog.geometry(f"520x580+{(_sw-520)//2}+{(_sh-580)//2}")
         dialog.resizable(False, False)
         dialog.configure(bg=COLORS['bg_card'])
         dialog.transient(self.parent)
@@ -176,8 +180,7 @@ class CustomerModule:
         
         customer_data = None
         if mode == 'edit' and customer_id:
-            result = self.db.execute_query('SELECT * FROM customers WHERE id = ?', (customer_id,))
-            customer_data = result[0] if result else None
+            customer_data = self.db.get_customer_by_id(customer_id)
         
         main_container = tk.Frame(dialog, bg=COLORS['bg_card'])
         main_container.pack(fill='both', expand=True)
@@ -248,15 +251,10 @@ class CustomerModule:
             try:
                 if mode == 'add':
                     self.db.add_customer(name, phone, email, address)
-                    messagebox.showinfo("Éxito", "Cliente agregado correctamente")
+                    messagebox.showinfo("Exito", "Cliente agregado correctamente")
                 else:
-                    query = '''
-                        UPDATE customers 
-                        SET name=?, phone=?, email=?, address=?
-                        WHERE id=?
-                    '''
-                    self.db.execute_update(query, (name, phone, email, address, customer_id))
-                    messagebox.showinfo("Éxito", "Cliente actualizado correctamente")
+                    self.db.update_customer(customer_id, name, phone, email, address)
+                    messagebox.showinfo("Exito", "Cliente actualizado correctamente")
                 
                 self.load_customers()
                 dialog.destroy()
@@ -277,9 +275,8 @@ class CustomerModule:
         
         if response:
             try:
-                query = 'DELETE FROM customers WHERE id = ?'
-                self.db.execute_update(query, (self.selected_customer_id,))
-                messagebox.showinfo("Éxito", "Cliente eliminado correctamente")
+                self.db.delete_customer(self.selected_customer_id)
+                messagebox.showinfo("Exito", "Cliente eliminado correctamente")
                 self.load_customers()
                 self.selected_customer_id = None
                 self.btn_edit.config(state='disabled')
