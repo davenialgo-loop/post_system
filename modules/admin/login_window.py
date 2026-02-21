@@ -1,274 +1,251 @@
-# -*- coding: utf-8 -*-
 """
-login_window.py — Venialgo Sistemas POS
+Ventana de Login — Venialgo Sistemas POS
 """
 
 import tkinter as tk
 from tkinter import messagebox
 import sqlite3, hashlib, os, sys
+from datetime import datetime
 
-C = {
-    "grad_top":   "#0D2255",
-    "grad_bot":   "#2451B5",
-    "card_bot":   "#F0F3FA",
-    "input_bg":   "#FFFFFF",
-    "input_brd":  "#D1D9EE",
-    "input_foc":  "#3B6FE0",
-    "btn_blue":   "#2F5FDB",
-    "btn_hover":  "#2450C8",
-    "btn_click":  "#1A3FA8",
-    "text_white": "#FFFFFF",
-    "text_sub":   "#A8BCD8",
-    "text_dark":  "#1A2B4A",
-    "text_label": "#4A5B7A",
-    "text_hint":  "#8A9BBF",
-    "footer_bg":  "#E4EAF5",
-    "footer_txt": "#6B7FA8",
-    "hdr_mid":    "#1A3A88",   # Color base widgets sobre gradiente
+FONT    = "Segoe UI"
+DB_FILE = "pos_database.db"
+
+# Colores
+C_HEADER_TOP = "#0D1B4B"   # azul muy oscuro arriba
+C_HEADER_BOT = "#1A3A8F"   # azul medio abajo del header
+C_FORM_BG    = "#EFF3F8"   # gris azulado claro
+C_WHITE      = "#FFFFFF"
+C_BLUE_BTN   = "#2D55CC"
+C_BLUE_HOV   = "#1D45BC"
+C_BORDER     = "#C8D4E8"
+C_TXT_MAIN   = "#1A1A2E"
+C_TXT_MUTED  = "#7A8BAA"
+C_FOOTER_BG  = "#0D1B4B"
+C_FOOTER_FG  = "#7A8BAA"
+
+FOOTER_INFO = {
+    "email":    "davenialgo@proton.me",
+    "whatsapp": "+595 994-686 493",
+    "web":      "www.venialgosistemas.com",
 }
-FONT = "Segoe UI"
 
-def _get_db():
-    base = os.environ.get("APPDATA", os.path.expanduser("~")) \
-           if sys.platform == "win32" else os.path.expanduser("~")
-    d = os.path.join(base, "VenialgoPOS")
-    os.makedirs(d, exist_ok=True)
-    return os.path.join(d, "pos_database.db")
+
+def _find_asset(filename):
+    if getattr(sys, "frozen", False):
+        start = os.path.dirname(sys.executable)
+    else:
+        start = os.path.dirname(os.path.abspath(__file__))
+    cur = start
+    for _ in range(4):
+        candidate = os.path.join(cur, "assets", filename)
+        if os.path.isfile(candidate):
+            return candidate
+        cur = os.path.dirname(cur)
+    return None
+
+
+def _apply_icon(window):
+    for name in ["venialgosist.ico", "app_icon.ico"]:
+        path = _find_asset(name)
+        if path:
+            try:
+                window.iconbitmap(path)
+                return
+            except Exception:
+                pass
+    path = _find_asset("VenialgoSistemasLogo.png")
+    if path:
+        try:
+            from PIL import Image, ImageTk
+            img   = Image.open(path).resize((32, 32), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            window.iconphoto(True, photo)
+            window._icon_ref = photo
+        except Exception:
+            pass
+
+
+def _load_logo(size=110):
+    path = _find_asset("VenialgoSistemasLogo.png")
+    if not path:
+        return None
+    try:
+        from PIL import Image, ImageTk
+        img = Image.open(path).convert("RGBA")
+        # Eliminar fondo negro pixel a pixel sin numpy
+        pixels = img.load()
+        w_, h_ = img.size
+        for y in range(h_):
+            for x in range(w_):
+                r, g, b, a = pixels[x, y]
+                if r < 30 and g < 30 and b < 30:
+                    pixels[x, y] = (r, g, b, 0)
+        bbox = img.getbbox()
+        if bbox:
+            img = img.crop(bbox)
+        img.thumbnail((size, size), Image.LANCZOS)
+        return ImageTk.PhotoImage(img)
+    except Exception:
+        return None
+
 
 def verify_login(usuario, password):
     hpwd = hashlib.sha256(password.encode()).hexdigest()
     try:
-        from modules.admin.admin_ui import _ensure_tables
-        _ensure_tables()
-    except Exception:
-        pass
-    try:
-        conn = sqlite3.connect(_get_db())
-        c = conn.cursor()
-        c.execute("SELECT id,nombre,rol FROM usuarios "
-                  "WHERE usuario=? AND password=? AND activo=1", (usuario, hpwd))
-        row = c.fetchone()
+        conn = sqlite3.connect(DB_FILE)
+        c    = conn.cursor()
+        c.execute("""SELECT id,nombre,rol FROM usuarios
+                     WHERE usuario=? AND password=? AND activo=1""",
+                  (usuario, hpwd))
+        row  = c.fetchone()
         conn.close()
         return row
     except Exception:
         return None
 
 
-class FlatEntry(tk.Frame):
-    def __init__(self, parent, show=None, **kw):
-        super().__init__(parent, bg=C["card_bot"], **kw)
-        self._border = tk.Frame(self, bg=C["input_brd"])
-        self._border.pack(fill='x', ipady=1)
-        inner = tk.Frame(self._border, bg=C["input_bg"])
-        inner.pack(fill='x', padx=1, pady=1)
-        self._var = tk.StringVar()
-        self._e = tk.Entry(inner, textvariable=self._var,
-                           show=show or "",
-                           font=(FONT, 11),
-                           bg=C["input_bg"], fg=C["text_dark"],
-                           relief='flat', bd=0,
-                           insertbackground=C["btn_blue"])
-        self._e.pack(fill='x', padx=14, pady=10)
-        self._e.bind('<FocusIn>',  lambda _: self._border.config(bg=C["input_foc"]))
-        self._e.bind('<FocusOut>', lambda _: self._border.config(bg=C["input_brd"]))
-
-    def get(self):   return self._var.get()
-    def focus(self): self._e.focus()
-
-
-class BlueBtn(tk.Label):
-    def __init__(self, parent, text, command, **kw):
-        super().__init__(parent, text=text,
-                         font=(FONT, 12, 'bold'),
-                         bg=C["btn_blue"], fg=C["text_white"],
-                         cursor='hand2', pady=14, **kw)
-        self._cmd = command
-        self.bind('<Enter>',           lambda _: self.config(bg=C["btn_hover"]))
-        self.bind('<Leave>',           lambda _: self.config(bg=C["btn_blue"]))
-        self.bind('<Button-1>',        lambda _: self.config(bg=C["btn_click"]))
-        self.bind('<ButtonRelease-1>', lambda _: (self.config(bg=C["btn_hover"]), self._cmd()))
-
-
 class LoginWindow:
-    W, H    = 440, 600
-    HDR_H   = 250   # Altura fija del header
-
     def __init__(self, root, on_success):
         self.root       = root
         self.on_success = on_success
-        self._gradient_drawn = False
-
-        self.root.title("Venialgo Sistemas POS")
+        self.root.title("Sistema POS — Iniciar Sesión")
         self.root.resizable(False, False)
-        self.root.configure(bg=C["grad_top"])
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
-        self._center()
+        self.root.configure(bg=C_HEADER_TOP)
+        _apply_icon(self.root)
         self._build()
+        self._center()
 
     def _center(self):
         self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth()  - self.W) // 2
-        y = (self.root.winfo_screenheight() - self.H) // 2
-        self.root.geometry(f"{self.W}x{self.H}+{x}+{y}")
+        w = self.root.winfo_reqwidth()
+        h = self.root.winfo_reqheight()
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
     def _build(self):
-        # ── Header: Canvas con degradado ───────────────────────
-        self._cv = tk.Canvas(self.root, width=self.W, height=self.HDR_H,
-                             highlightthickness=0, bd=0)
-        self._cv.pack(fill='x')
+        W = 400   # ancho fijo de la ventana
 
-        # Dibujar gradiente UNA sola vez con after
-        self.root.after(10, self._draw_gradient)
+        # ══════════════════════════════════════════
+        # HEADER — fondo degradado simulado con canvas
+        # ══════════════════════════════════════════
+        hdr_h = 230
+        canvas = tk.Canvas(self.root, width=W, height=hdr_h,
+                           highlightthickness=0, bd=0)
+        canvas.pack(fill="x")
 
-        # Widgets del header SOBRE el canvas
-        self._build_header_widgets()
+        # Degradado vertical: dibujar líneas horizontales de C_HEADER_TOP → C_HEADER_BOT
+        def hex_to_rgb(h):
+            h = h.lstrip("#")
+            return tuple(int(h[i:i+2],16) for i in (0,2,4))
 
-        # ── Cuerpo gris ─────────────────────────────────────────
-        body = tk.Frame(self.root, bg=C["card_bot"])
-        body.pack(fill='both', expand=True)
-        self._build_body(body)
+        r1,g1,b1 = hex_to_rgb(C_HEADER_TOP)
+        r2,g2,b2 = hex_to_rgb(C_HEADER_BOT)
+        for i in range(hdr_h):
+            t  = i / hdr_h
+            r  = int(r1 + (r2-r1)*t)
+            g  = int(g1 + (g2-g1)*t)
+            b  = int(b1 + (b2-b1)*t)
+            color = f"#{r:02x}{g:02x}{b:02x}"
+            canvas.create_line(0, i, W, i, fill=color)
 
-        self.root.bind('<Return>', lambda e: self._login())
+        # Logo — guardar en self para evitar que el GC lo destruya
+        self._logo_photo = _load_logo(size=110)
+        if self._logo_photo:
+            canvas.create_image(W//2, 85, image=self._logo_photo, anchor="center")
+        else:
+            canvas.create_text(W//2, 80, text="🏪",
+                               font=(FONT, 48), fill=C_WHITE, anchor="center")
 
-    def _draw_gradient(self):
-        """Dibuja el degradado vertical en el canvas del header."""
-        w = self.W
-        h = self.HDR_H
-        r1, g1, b1 = 0x0D, 0x22, 0x55   # grad_top
-        r2, g2, b2 = 0x24, 0x51, 0xB5   # grad_bot
-        for i in range(h):
-            t = i / h
-            r = int(r1 + (r2 - r1) * t)
-            g = int(g1 + (g2 - g1) * t)
-            b = int(b1 + (b2 - b1) * t)
-            self._cv.create_line(0, i, w, i, fill=f'#{r:02x}{g:02x}{b:02x}')
-        # Elevar el frame de widgets sobre las líneas del canvas
-        self._hdr_frame.lift()
+        # Texto VENIALGO SISTEMAS (simulamos con dos labels sobre el canvas)
+        # usamos create_text con fuentes grandes
+        canvas.create_text(W//2, 155, text="Venialgo Sistemas POS",
+                           font=(FONT, 16, "bold"), fill=C_WHITE, anchor="center")
+        canvas.create_text(W//2, 178, text="Inicie sesión para continuar",
+                           font=(FONT, 9), fill="#9DB4E0", anchor="center")
 
-    def _build_header_widgets(self):
-        """Frame de widgets flotando sobre el canvas."""
-        MID = C["hdr_mid"]
-        frm = tk.Frame(self._cv, bg=MID, bd=0, highlightthickness=0)
-        frm.place(x=0, y=0, width=self.W, height=self.HDR_H)
-        self._hdr_frame = frm
+        # ══════════════════════════════════════════
+        # FORMULARIO — panel blanco/gris
+        # ══════════════════════════════════════════
+        form = tk.Frame(self.root, bg=C_FORM_BG, padx=32, pady=28)
+        form.pack(fill="x")
 
-        # Logo
-        logo_frame = tk.Frame(frm, bg=MID)
-        logo_frame.pack(pady=(22, 6))
+        # ── Campo Usuario ──────────────────────────
+        row_u = tk.Frame(form, bg=C_FORM_BG)
+        row_u.pack(fill="x", pady=(0, 4))
+        tk.Label(row_u, text="👤  Usuario",
+                 font=(FONT, 10, "bold"), bg=C_FORM_BG,
+                 fg=C_TXT_MAIN).pack(anchor="w")
 
-        logo_ok   = False
-        logo_path = self._find_logo()
+        self._var_usr = tk.StringVar()
+        frm_u = tk.Frame(form, bg=C_BORDER, padx=1, pady=1)
+        frm_u.pack(fill="x", pady=(0, 16))
+        self._ent_usr = tk.Entry(frm_u, textvariable=self._var_usr,
+                                 font=(FONT, 11), relief="flat",
+                                 bg=C_WHITE, fg=C_TXT_MAIN,
+                                 insertbackground=C_BLUE_BTN)
+        self._ent_usr.pack(fill="x", ipady=8, padx=2)
+        self._ent_usr.bind("<FocusIn>",  lambda e: frm_u.config(bg=C_BLUE_BTN))
+        self._ent_usr.bind("<FocusOut>", lambda e: frm_u.config(bg=C_BORDER))
 
-        if logo_path:
-            try:
-                from PIL import Image, ImageTk
-                img = Image.open(logo_path).convert("RGBA")
-                img.thumbnail((100, 100), Image.LANCZOS)
-                bg_img = Image.new("RGBA", img.size, (0x1A, 0x3A, 0x88, 255))
-                bg_img.paste(img, mask=img.split()[3])
-                self._logo_img = ImageTk.PhotoImage(bg_img.convert("RGB"))
-                tk.Label(logo_frame, image=self._logo_img, bg=MID).pack()
-                logo_ok = True
-            except ImportError:
-                try:
-                    self._logo_img = tk.PhotoImage(file=logo_path)
-                    w = self._logo_img.width()
-                    if w > 100:
-                        f = max(1, w // 100)
-                        self._logo_img = self._logo_img.subsample(f, f)
-                    tk.Label(logo_frame, image=self._logo_img, bg=MID).pack()
-                    logo_ok = True
-                except Exception:
-                    pass
-            except Exception:
-                pass
+        # ── Campo Contraseña ───────────────────────
+        tk.Label(form, text="🔒  Contraseña",
+                 font=(FONT, 10, "bold"), bg=C_FORM_BG,
+                 fg=C_TXT_MAIN).pack(anchor="w", pady=(0, 4))
 
-        if not logo_ok:
-            tk.Label(logo_frame, text="V", font=(FONT, 28, 'bold'),
-                     bg=C["btn_blue"], fg="white",
-                     width=3, pady=8).pack()
+        self._var_pwd = tk.StringVar()
+        frm_p = tk.Frame(form, bg=C_BORDER, padx=1, pady=1)
+        frm_p.pack(fill="x", pady=(0, 22))
+        self._ent_pwd = tk.Entry(frm_p, textvariable=self._var_pwd,
+                                 show="•", font=(FONT, 11), relief="flat",
+                                 bg=C_WHITE, fg=C_TXT_MAIN,
+                                 insertbackground=C_BLUE_BTN)
+        self._ent_pwd.pack(fill="x", ipady=8, padx=2)
+        self._ent_pwd.bind("<FocusIn>",  lambda e: frm_p.config(bg=C_BLUE_BTN))
+        self._ent_pwd.bind("<FocusOut>", lambda e: frm_p.config(bg=C_BORDER))
 
-        tk.Label(frm, text="Venialgo Sistemas POS",
-                 font=(FONT, 14, 'bold'),
-                 bg=MID, fg=C["text_white"]).pack(pady=(6, 2))
-        tk.Label(frm, text="Inicie sesión para continuar",
-                 font=(FONT, 9),
-                 bg=MID, fg=C["text_sub"]).pack()
+        # ── Botón Ingresar ─────────────────────────
+        btn = tk.Label(form, text="  ✅  INGRESAR",
+                       font=(FONT, 12, "bold"),
+                       bg=C_BLUE_BTN, fg=C_WHITE,
+                       cursor="hand2", pady=13)
+        btn.pack(fill="x")
+        btn.bind("<Enter>",           lambda e: btn.config(bg=C_BLUE_HOV))
+        btn.bind("<Leave>",           lambda e: btn.config(bg=C_BLUE_BTN))
+        btn.bind("<ButtonRelease-1>", lambda e: self._login())
 
-    def _build_body(self, body):
-        form = tk.Frame(body, bg=C["card_bot"], padx=36)
-        form.pack(fill='x', pady=(24, 0))
+        # ── Hint ──────────────────────────────────
+        tk.Label(form, text="Usuario por defecto: admin / admin123",
+                 font=(FONT, 8), bg=C_FORM_BG,
+                 fg=C_TXT_MUTED).pack(pady=(12, 0))
 
-        # Usuario
-        row_u = tk.Frame(form, bg=C["card_bot"])
-        row_u.pack(fill='x', pady=(0, 5))
-        tk.Label(row_u, text="👤", bg=C["card_bot"], font=(FONT, 11)).pack(side='left', padx=(0, 6))
-        tk.Label(row_u, text="Usuario", font=(FONT, 10, 'bold'),
-                 bg=C["card_bot"], fg=C["text_label"]).pack(side='left')
-        self._entry_usr = FlatEntry(form)
-        self._entry_usr.pack(fill='x', pady=(0, 16))
-        self._entry_usr.focus()
-
-        # Contraseña
-        row_p = tk.Frame(form, bg=C["card_bot"])
-        row_p.pack(fill='x', pady=(0, 5))
-        tk.Label(row_p, text="🔒", bg=C["card_bot"], font=(FONT, 11)).pack(side='left', padx=(0, 6))
-        tk.Label(row_p, text="Contraseña", font=(FONT, 10, 'bold'),
-                 bg=C["card_bot"], fg=C["text_label"]).pack(side='left')
-        self._entry_pwd = FlatEntry(form, show="●")
-        self._entry_pwd.pack(fill='x', pady=(0, 20))
-
-        # Botón
-        BlueBtn(form, text="☑  INGRESAR", command=self._login).pack(fill='x')
-
-        # Hint
-        tk.Label(body, text="Usuario por defecto:  admin  /  admin123",
-                 font=(FONT, 8), bg=C["card_bot"], fg=C["text_hint"]).pack(pady=(12, 0))
-
-        # Footer
-        tk.Frame(body, bg="#C8D4EE", height=1).pack(fill='x', side='bottom')
-        footer = tk.Frame(body, bg=C["footer_bg"])
-        footer.pack(fill='x', side='bottom')
+        # ══════════════════════════════════════════
+        # FOOTER
+        # ══════════════════════════════════════════
+        footer = tk.Frame(self.root, bg=C_FOOTER_BG)
+        footer.pack(fill="x")
         tk.Label(footer,
-                 text=f"  ✉  davenialgo@proton.me   |   📱  WhatsApp: +595 994-686 493  ",
-                 font=(FONT, 8), bg=C["footer_bg"], fg=C["footer_txt"]).pack(pady=7)
+                 text=f"  ✉ {FOOTER_INFO['email']}   |   "
+                      f"📱 WhatsApp: {FOOTER_INFO['whatsapp']}   |   "
+                      f"🌐 {FOOTER_INFO['web']}  ",
+                 font=(FONT, 7), bg=C_FOOTER_BG,
+                 fg=C_FOOTER_FG, pady=7).pack()
 
-    def _find_logo(self):
-        paths = [
-            os.path.join(os.path.dirname(sys.executable), "assets", "VenialgoSistemasLogo.png"),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "VenialgoSistemasLogo.png"),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "VenialgoSistemasLogo.png"),
-            "assets/VenialgoSistemasLogo.png",
-            "VenialgoSistemasLogo.png",
-        ]
-        for p in paths:
-            try:
-                if os.path.exists(p):
-                    return p
-            except Exception:
-                pass
-        return None
+        # Binds
+        self.root.bind("<Return>", lambda e: self._login())
+        self._ent_usr.focus_set()
 
     def _login(self):
-        usr = self._entry_usr.get().strip()
-        pwd = self._entry_pwd.get().strip()
+        usr = self._var_usr.get().strip()
+        pwd = self._var_pwd.get().strip()
         if not usr or not pwd:
-            self._shake(); return
+            messagebox.showwarning("Atención", "Complete usuario y contraseña.")
+            return
         result = verify_login(usr, pwd)
         if result:
             uid, nombre, rol = result
             self.root.destroy()
             self.on_success(uid, nombre, rol)
         else:
-            self._shake()
-            messagebox.showerror("Acceso denegado",
-                "Usuario o contraseña incorrectos.\n\n"
-                "Por defecto:  admin  /  admin123",
-                parent=self.root)
-
-    def _shake(self):
-        ox, oy = self.root.winfo_x(), self.root.winfo_y()
-        for d in [10, -10, 8, -8, 5, -5, 2, -2, 0]:
-            self.root.geometry(f"{self.W}x{self.H}+{ox+d}+{oy}")
-            self.root.update()
-            self.root.after(18)
+            messagebox.showerror("Error",
+                                 "Credenciales incorrectas o usuario inactivo.")

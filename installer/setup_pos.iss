@@ -23,6 +23,7 @@ PrivilegesRequired=admin
 MinVersion=10.0
 OutputDir=Output
 OutputBaseFilename=POS_Setup_v1.1
+SetupIconFile=..\assets\app_icon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -34,6 +35,7 @@ Name: "desktopicon"; Description: "Create desktop icon"
 Source: "..\dist\POS\POS.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\POS\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\assets\VenialgoSistemasLogo.png"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\assets\app_icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 
 [Dirs]
@@ -45,6 +47,8 @@ Name: "{app}\assets\logos"
 Name: "{group}\Sistema POS"; Filename: "{app}\POS.exe"
 Name: "{group}\Uninstall Sistema POS"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\Sistema POS"; Filename: "{app}\POS.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Venialgo POS"; Filename: "{app}\POS.exe"; IconFilename: "{app}\assets\app_icon.ico"
+Name: "{autodesktop}\Venialgo POS"; Filename: "{app}\POS.exe"; IconFilename: "{app}\assets\app_icon.ico"; Tasks: desktopicon
 
 [Registry]
 Root: HKLM; Subkey: "SOFTWARE\VenialgoPOS"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey

@@ -4,6 +4,10 @@ from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
 from config.settings import COLORS, FONTS as _F, SPACING, BUTTON_STYLES, BUSINESS
 from utils.formatters import format_currency, generate_ticket
+try:
+    from utils.window_icon import set_icon as _set_icon
+except ImportError:
+    def _set_icon(w): pass
 
 THEME = {
     "ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB",
@@ -254,6 +258,7 @@ class SalesModule:
             messagebox.showwarning("Carrito vacío","Agregue productos al carrito"); return
         total=sum(i['subtotal'] for i in self.cart)
         dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg)
         dlg.title("Finalizar Venta")
         dlg.resizable(False,False)
         dlg.configure(bg=THEME["ct_bg"])
@@ -422,17 +427,332 @@ class SalesModule:
 
     def _show_ticket(self,sale_id,total,method,paid,change):
         tw=tk.Toplevel(self.parent)
-        tw.title(f"Ticket #{sale_id}")
-        tw.geometry("440x580")
+        _set_icon(tw)
+        tw.title("Ticket #"+str(sale_id))
         tw.configure(bg='white')
-        tw.update_idletasks()
-        sw,sh=tw.winfo_screenwidth(),tw.winfo_screenheight()
-        tw.geometry(f"440x580+{(sw-440)//2}+{(sh-580)//2}")
-        ticket_data={'id':sale_id,'date':datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'items':self.cart,'total':total,'payment_method':method,
-            'amount_paid':paid,'change':change}
-        txt=generate_ticket(ticket_data,BUSINESS['name'])
-        st=scrolledtext.ScrolledText(tw,font=('Courier New',10),bg='white',padx=20,pady=20)
-        st.pack(fill='both',expand=True,padx=16,pady=16)
+        tw.transient(self.parent)
+        tw.grab_set()
+        tw.withdraw()  # ocultar mientras se construye
+        tw.attributes('-topmost',True)
+        tw.geometry("440x620")
+
+        # Obtener datos reales de la empresa desde la base de datos
+        try:
+            from utils.company_header import get_company
+            co=get_company()
+        except Exception:
+            co={}
+
+        empresa  = co.get('razon_social') or BUSINESS.get('name','Venialgo Sistemas')
+        ruc      = co.get('ruc','')
+        telefono = co.get('telefono','')
+        direccion= co.get('direccion','')
+        ciudad   = co.get('ciudad','')
+        email    = co.get('email','')
+        web      = co.get('web','')
+
+        from utils.formatters import format_currency
+
+        # Rollo 75mm — 44 caracteres por línea a Courier New 10pt
+        W        = 44
+        SEP      = '-' * W
+        SEP2     = '=' * W
+        now      = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+
+        # Columnas: Producto 18 | Cant 4 | Precio 11 | Sub 11 = 44
+        COL_PROD = 18
+        COL_CANT =  4
+        COL_PREC = 11
+        COL_SUB  = 11
+
+        def fmt_num(n):
+            try: return "{:,}".format(int(n)).replace(",",".")
+            except: return str(n)
+
+        def fmt_row(nombre, cant, precio, sub):
+            n = nombre[:COL_PROD].ljust(COL_PROD)
+            c = str(cant).rjust(COL_CANT)
+            p = fmt_num(precio).rjust(COL_PREC)
+            s = fmt_num(sub).rjust(COL_SUB)
+            return n + c + p + s
+
+        def fmt_total_row(label, value):
+            return label.rjust(W - COL_SUB) + format_currency(value).rjust(COL_SUB)
+
+        lines=[]
+        lines.append(SEP2)
+        lines.append(empresa.center(W))
+        if ruc:       lines.append(("RUC: " + ruc).center(W))
+        if direccion: lines.append(direccion[:W].center(W))
+        if ciudad:    lines.append(ciudad[:W].center(W))
+        if telefono:  lines.append(("Tel: " + telefono).center(W))
+        if email:     lines.append(email[:W].center(W))
+        if web:       lines.append(web[:W].center(W))
+        lines.append(SEP2)
+        lines.append(("TICKET DE VENTA #" + str(sale_id)).center(W))
+        lines.append(("Fecha: " + now).center(W))
+        lines.append(("Metodo: " + method).center(W))
+        lines.append(SEP)
+
+        # Cabecera columnas con separador visual
+        hdr = "PRODUCTO".ljust(COL_PROD) + "CANT".rjust(COL_CANT) + "PRECIO".rjust(COL_PREC) + "SUBTOTAL".rjust(COL_SUB)
+        lines.append(hdr)
+        # Separadores por columna
+        lines.append('-'*COL_PROD + '-'*COL_CANT + '-'*COL_PREC + '-'*COL_SUB)
+
+        for item in self.cart:
+            lines.append(fmt_row(item['name'], item['quantity'],
+                                 item['unit_price'], item['subtotal']))
+            # Si el nombre es largo, segunda línea con continuación
+            if len(item['name']) > COL_PROD:
+                resto = item['name'][COL_PROD:][:COL_PROD]
+                lines.append(' ' + resto)
+
+        lines.append(SEP)
+        lines.append(fmt_total_row("TOTAL:", total))
+        lines.append(fmt_total_row("Pagado:", paid))
+        chg = paid - total
+        lines.append(fmt_total_row("Cambio:", max(0, chg)))
+        lines.append(SEP2)
+        lines.append("  Gracias por su compra!  ".center(W))
+        lines.append(SEP)
+        lines.append("Venialgo Sistemas POS".center(W))
+        lines.append("davenialgo@proton.me".center(W))
+        lines.append("WhatsApp: +595 994-686 493".center(W))
+        lines.append("www.venialgosistemas.com".center(W))
+        lines.append(SEP2)
+
+        txt="\n".join(lines)
+
+        # Detectar impresora de tickets al abrir la ventana
+        printer_name=self._detect_ticket_printer()
+
+        # Mostrar ticket
+        st=scrolledtext.ScrolledText(tw,font=('Courier New',10),bg='white',padx=16,pady=12)
+        st.pack(fill='both',expand=True,padx=12,pady=12)
         st.insert('1.0',txt); st.config(state='disabled')
-        _btn(tw,"Cerrar",tw.destroy,THEME["btn_secondary"]).pack(pady=12)
+
+        # Barra inferior con info de impresora
+        info_bar=tk.Frame(tw,bg='#F9FAFB',pady=6)
+        info_bar.pack(fill='x',padx=12)
+        if printer_name:
+            tk.Label(info_bar,text=f"🖨  {printer_name}",
+                     font=('Segoe UI',8),bg='#F9FAFB',fg='#059669').pack(side='left',padx=8)
+        else:
+            tk.Label(info_bar,text="⚠  Sin impresora detectada",
+                     font=('Segoe UI',8),bg='#F9FAFB',fg='#D97706').pack(side='left',padx=8)
+
+        btn_row=tk.Frame(tw,bg='white'); btn_row.pack(pady=(4,12))
+
+        # Selector de impresora
+        printers=self._get_all_printers()
+        if printers:
+            printer_var=tk.StringVar(value=printer_name or printers[0])
+            printer_cb=ttk.Combobox(btn_row,textvariable=printer_var,
+                                    values=printers,state='readonly',
+                                    font=('Segoe UI',9),width=28)
+            printer_cb.pack(side='left',padx=(0,8))
+            _btn(btn_row,"Imprimir",
+                 lambda:self._print_ticket(txt,printer_var.get()),
+                 THEME["acc_blue"],"🖨").pack(side='left',padx=(0,4))
+        else:
+            _btn(btn_row,"Imprimir",
+                 lambda:self._print_ticket(txt,None),
+                 THEME["acc_blue"],"🖨").pack(side='left',padx=(0,4))
+
+        _btn(btn_row,"Cerrar",tw.destroy,THEME["btn_secondary"],"✕").pack(side='left',padx=4)
+
+    # ── Detección de impresoras ───────────────────────────────
+
+    def _get_all_printers(self):
+        """Devuelve lista de todas las impresoras instaladas en Windows."""
+        printers=[]
+        try:
+            import winreg
+            key=winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\Print\Printers")
+            i=0
+            while True:
+                try:
+                    printers.append(winreg.EnumKey(key,i)); i+=1
+                except OSError: break
+            winreg.CloseKey(key)
+        except Exception:
+            # Fallback: win32print si está disponible
+            try:
+                import win32print
+                printers=[p[2] for p in win32print.EnumPrinters(
+                    win32print.PRINTER_ENUM_LOCAL|win32print.PRINTER_ENUM_CONNECTIONS)]
+            except Exception:
+                pass
+        return printers
+
+    def _detect_ticket_printer(self):
+        """
+        Detecta automáticamente la impresora de tickets térmica.
+        Prioridad:
+          1. Impresoras con palabras clave de ticket/térmica en el nombre
+          2. Impresora predeterminada del sistema si no hay ninguna específica
+        """
+        # Palabras clave que indican impresoras de tickets
+        TICKET_KEYWORDS = [
+            'pos','receipt','ticket','thermal','termic',
+            'epson tm','star','bixolon','citizen','sewoo',
+            'xprinter','rongta','gprinter','80mm','58mm',
+            'tsp','rp-','tmt','pos-',
+        ]
+        printers=self._get_all_printers()
+        if not printers:
+            return None
+
+        # Buscar por palabras clave (case-insensitive)
+        for p in printers:
+            pl=p.lower()
+            if any(kw in pl for kw in TICKET_KEYWORDS):
+                return p
+
+        # Si no encontró térmica, retornar la impresora predeterminada
+        try:
+            import winreg
+            key=winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows NT\CurrentVersion\Windows")
+            default,_=winreg.QueryValueEx(key,"Device")
+            winreg.CloseKey(key)
+            default_name=default.split(',')[0].strip()
+            if default_name in printers:
+                return default_name
+        except Exception:
+            pass
+
+        # Último recurso: primera impresora de la lista
+        return printers[0] if printers else None
+
+    def _print_ticket(self, txt, printer_name=None):
+        """
+        Imprime el ticket directo a la impresora térmica.
+        Intenta 3 métodos en orden de confiabilidad.
+        """
+        import sys, os, tempfile, subprocess
+
+        # Preparar bytes del ticket (cp1252 para Windows, utf-8 para Linux)
+        encoding = 'cp1252' if sys.platform == 'win32' else 'utf-8'
+        raw_bytes = (txt + '\n\n\n\n').encode(encoding, errors='replace')
+
+        # ── MÉTODO 1: win32print — más directo y confiable ────
+        if sys.platform == 'win32':
+            if self._print_win32(raw_bytes, printer_name):
+                return
+
+        # ── MÉTODO 2: PowerShell Out-Printer ──────────────────
+        if sys.platform == 'win32':
+            if self._print_powershell(txt, printer_name):
+                return
+
+        # ── MÉTODO 3: Notepad /p (siempre disponible en Win) ──
+        if sys.platform == 'win32':
+            if self._print_notepad(txt, printer_name):
+                return
+
+        # ── MÉTODO 4: lp (Linux/Mac) ──────────────────────────
+        if sys.platform != 'win32':
+            try:
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.txt',
+                                                 delete=False) as f:
+                    f.write(raw_bytes); path=f.name
+                cmd = ['lp'] + (['-d', printer_name] if printer_name else []) + [path]
+                subprocess.run(cmd, check=True)
+                messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
+                return
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+                return
+
+        messagebox.showerror("Error al imprimir",
+            "No se pudo imprimir. Verificá que la impresora esté encendida y conectada.")
+
+    def _print_win32(self, raw_bytes, printer_name=None):
+        """Impresión RAW directa con win32print. Más compatible con térmicas."""
+        try:
+            import win32print
+            printer = printer_name or win32print.GetDefaultPrinter()
+            if not printer:
+                return False
+            handle = win32print.OpenPrinter(printer)
+            try:
+                job = win32print.StartDocPrinter(handle, 1,
+                    ("Ticket POS", None, "RAW"))
+                try:
+                    win32print.StartPagePrinter(handle)
+                    win32print.WritePrinter(handle, raw_bytes)
+                    win32print.EndPagePrinter(handle)
+                finally:
+                    win32print.EndDocPrinter(handle)
+            finally:
+                win32print.ClosePrinter(handle)
+            messagebox.showinfo("✅ Impreso", f"Ticket enviado a:\n{printer}")
+            return True
+        except ImportError:
+            return False   # win32print no instalado
+        except Exception as e:
+            messagebox.showerror("Error win32print", str(e))
+            return False
+
+    def _print_powershell(self, txt, printer_name=None):
+        """Impresión via PowerShell Out-Printer."""
+        import tempfile, subprocess
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
+                                             delete=False, encoding='utf-8') as f:
+                f.write(txt); path = f.name
+
+            ps_cmd = f'Get-Content -Path "{path}" | '
+            if printer_name:
+                ps_cmd += f'Out-Printer -Name "{printer_name}"'
+            else:
+                ps_cmd += 'Out-Printer'
+
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-Command', ps_cmd],
+                capture_output=True, timeout=15)
+
+            try: os.unlink(path)
+            except: pass
+
+            if result.returncode == 0:
+                messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
+                return True
+            return False
+        except Exception:
+            return False
+
+    def _print_notepad(self, txt, printer_name=None):
+        """Último recurso: imprimir via Notepad silencioso."""
+        import tempfile, subprocess, os, time
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
+                                             delete=False, encoding='cp1252',
+                                             errors='replace') as f:
+                f.write(txt); path = f.name
+
+            if printer_name:
+                # Notepad con impresora específica
+                subprocess.Popen(
+                    ['notepad.exe', '/pt', path, printer_name],
+                    creationflags=0x08000000)  # CREATE_NO_WINDOW
+            else:
+                subprocess.Popen(
+                    ['notepad.exe', '/p', path],
+                    creationflags=0x08000000)
+
+            # Esperar que notepad envíe el job y luego borrar el archivo
+            def _cleanup():
+                time.sleep(5)
+                try: os.unlink(path)
+                except: pass
+            import threading
+            threading.Thread(target=_cleanup, daemon=True).start()
+
+            messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
+            return True
+        except Exception:
+            return False

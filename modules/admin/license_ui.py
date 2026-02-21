@@ -1,57 +1,65 @@
 """
 UI de Activación de Licencia y Contrato de Uso
-Venialgo Sistemas — POS
+Venialgo Sistemas — POS  |  Diseño moderno consistente con el sistema
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import os
-import json
+from tkinter import messagebox
+import os, sys
 from datetime import datetime
+import json
 
-try:
-    from config.settings import COLORS, FONTS, SPACING
-except ImportError:
-    COLORS  = {'primary': '#2563eb', 'bg_card': '#ffffff', 'bg_main': '#f1f5f9',
-               'bg_sidebar': '#1e293b', 'text_white': '#ffffff',
-               'text_secondary': '#64748b', 'success': '#16a34a', 'danger': '#dc2626'}
-    FONTS   = {'family': 'Segoe UI', 'title': 16, 'subtitle': 13, 'body': 10, 'small': 9}
-    SPACING = {'xs': 4, 'sm': 8, 'md': 12, 'lg': 16, 'xl': 24}
+# ── Paleta consistente con el sistema ─────────────────────────
+THEME = {
+    "sb_bg":        "#0D1B4B",
+    "sb_mid":       "#1A3A8F",
+    "card_bg":      "#FFFFFF",
+    "ct_bg":        "#F9FAFB",
+    "acc_blue":     "#2563EB",
+    "acc_blue_dk":  "#1D4ED8",
+    "acc_green":    "#059669",
+    "acc_green_dk": "#047857",
+    "acc_rose":     "#E11D48",
+    "acc_amber":    "#D97706",
+    "txt_primary":  "#111827",
+    "txt_secondary":"#6B7280",
+    "txt_white":    "#FFFFFF",
+    "border":       "#E5E7EB",
+    "input_brd":    "#D1D5DB",
+    "footer_bg":    "#0F172A",
+    "footer_fg":    "#64748B",
+    "hw_bg":        "#EFF6FF",
+    "hw_border":    "#BFDBFE",
+    "hw_txt":       "#1D4ED8",
+}
+FONT = "Segoe UI"
 
-from license.license_manager import (
-    activate_license, get_license_info, get_hardware_id,
-    is_licensed, LicenseStatus
-)
+CONTACT = {
+    "email":    "davenialgo@proton.me",
+    "whatsapp": "+595 994-686 493",
+    "web":      "www.venialgosistemas.com",
+}
 
-import sys as _sys_eula
+# ── EULA ──────────────────────────────────────────────────────
 def _get_eula_file():
-    import os
-    if _sys_eula.platform == "win32":
-        base = os.environ.get("APPDATA", os.path.expanduser("~"))
-    else:
-        base = os.path.expanduser("~")
+    base = os.environ.get("APPDATA", os.path.expanduser("~")) if sys.platform=="win32" \
+           else os.path.expanduser("~")
     d = os.path.join(base, "VenialgoPOS")
     os.makedirs(d, exist_ok=True)
     return os.path.join(d, "contrato_uso.accepted")
+
 EULA_FILE = _get_eula_file()
-COMPANY_NAME = "Venialgo Sistemas"
 
-
-# ════════════════════════════════════════════════════════
-#  CONTRATO DE USO (EULA)
-# ════════════════════════════════════════════════════════
-
-EULA_TEXT = """
+EULA_TEXT = """\
 CONTRATO DE LICENCIA DE USO DE SOFTWARE
 Sistema de Punto de Venta (POS)
 © 2024 Venialgo Sistemas — Todos los derechos reservados
-
-────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. CONCESIÓN DE LICENCIA
-   Venialgo Sistemas le otorga una licencia no exclusiva, intransferible y
-   limitada para instalar y usar el Software en el número de equipos indicado
-   en su licencia, exclusivamente para sus operaciones comerciales internas.
+   Venialgo Sistemas le otorga una licencia no exclusiva, intransferible
+   y limitada para instalar y usar el Software en el número de equipos
+   indicado en su licencia, exclusivamente para sus operaciones comerciales.
 
 2. RESTRICCIONES
    Queda estrictamente prohibido:
@@ -78,8 +86,8 @@ Sistema de Punto de Venta (POS)
 
 6. GARANTÍA LIMITADA
    El Software se provee "tal como está". Venialgo Sistemas no garantiza
-   que el Software sea libre de errores. La responsabilidad máxima de
-   Venialgo Sistemas se limita al valor pagado por la licencia.
+   que el Software sea libre de errores. La responsabilidad máxima se
+   limita al valor pagado por la licencia.
 
 7. TERMINACIÓN
    Esta licencia se termina automáticamente si incumple cualquiera de
@@ -89,37 +97,85 @@ Sistema de Punto de Venta (POS)
    Este contrato se rige por las leyes de la República del Paraguay.
    Cualquier disputa se someterá a los tribunales de Asunción.
 
-────────────────────────────────────────────────────────────
-
-Para soporte técnico:
-  📧 Email:     davenialgo@proton.me
-  📱 WhatsApp:  +595 994-686 493
-  🌐 Web:       www.venialgosistemas.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Soporte técnico:
+  ✉  davenialgo@proton.me
+  📱 WhatsApp: +595 994-686 493
+  🌐 www.venialgosistemas.com
 """
-
 
 def eula_accepted() -> bool:
     return os.path.exists(EULA_FILE)
 
-
 def mark_eula_accepted():
     try:
         with open(EULA_FILE, 'w') as f:
-            json.dump({"accepted": True,
-                       "date": datetime.now().isoformat()}, f)
-        return True
-    except Exception as e:
-        print(f"Warning: no se pudo guardar EULA: {e}")
-        return True  # Continuar de todas formas
+            json.dump({"accepted": True, "date": datetime.now().isoformat()}, f)
+    except Exception:
+        pass
+    return True
 
+
+# ── Helpers UI ────────────────────────────────────────────────
+
+def _apply_icon(window):
+    if getattr(sys, "frozen", False):
+        start = os.path.dirname(sys.executable)
+    else:
+        start = os.path.dirname(os.path.abspath(__file__))
+    cur = start
+    for _ in range(4):
+        for name in ["venialgosist.ico", "venialgo.ico", "app_icon.ico"]:
+            p = os.path.join(cur, "assets", name)
+            if os.path.isfile(p):
+                try: window.iconbitmap(p); return
+                except: pass
+        cur = os.path.dirname(cur)
+
+def _gradient_header(parent, w, h, title, subtitle):
+    """Canvas con degradado azul + textos centrados."""
+    canvas = tk.Canvas(parent, width=w, height=h, highlightthickness=0, bd=0)
+    canvas.pack(fill="x")
+    r1,g1,b1 = 0x0D,0x1B,0x4B
+    r2,g2,b2 = 0x1A,0x3A,0x8F
+    for i in range(h):
+        t = i/h
+        r=int(r1+(r2-r1)*t); g=int(g1+(g2-g1)*t); b=int(b1+(b2-b1)*t)
+        canvas.create_line(0,i,w,i, fill=f"#{r:02x}{g:02x}{b:02x}")
+    canvas.create_text(w//2, h//2-10, text=title,
+                       font=(FONT, 13, "bold"), fill=THEME["txt_white"], anchor="center")
+    canvas.create_text(w//2, h//2+12, text=subtitle,
+                       font=(FONT, 9), fill="#9DB4E0", anchor="center")
+    return canvas
+
+def _btn(parent, text, cmd, bg, hover=None):
+    hover = hover or bg
+    lbl = tk.Label(parent, text=text, font=(FONT, 10, "bold"),
+                   bg=bg, fg=THEME["txt_white"], cursor="hand2",
+                   padx=20, pady=10)
+    lbl.bind("<Enter>",           lambda e: lbl.config(bg=hover))
+    lbl.bind("<Leave>",           lambda e: lbl.config(bg=bg))
+    lbl.bind("<ButtonRelease-1>", lambda e: cmd())
+    return lbl
+
+def _footer(parent):
+    f = tk.Frame(parent, bg=THEME["footer_bg"])
+    f.pack(fill="x", side="bottom")
+    tk.Label(f, text=f"  ✉ {CONTACT['email']}   |   📱 {CONTACT['whatsapp']}   |   🌐 {CONTACT['web']}  ",
+             font=(FONT, 7), bg=THEME["footer_bg"], fg=THEME["footer_fg"], pady=6).pack()
+    return f
+
+def _center_window(win, w, h):
+    win.update_idletasks()
+    sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+    win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+
+
+# ════════════════════════════════════════════════════════════
+#  CONTRATO DE USO (EULA)
+# ════════════════════════════════════════════════════════════
 
 class EULAWindow:
-    """
-    Muestra el contrato de uso. Bloquea el uso hasta que se acepte.
-    on_accept() se llama si el usuario acepta.
-    on_reject() se llama (o cierra app) si rechaza.
-    """
-
     def __init__(self, root, on_accept, on_reject=None):
         self.root      = root
         self.on_accept = on_accept
@@ -127,77 +183,65 @@ class EULAWindow:
 
         self.win = tk.Toplevel(root)
         self.win.title("Contrato de Licencia de Uso — Venialgo Sistemas")
-        self.win.geometry("680x580")
-        self.win.configure(bg=COLORS['bg_card'])
+        self.win.configure(bg=THEME["ct_bg"])
         self.win.resizable(False, False)
         self.win.protocol("WM_DELETE_WINDOW", self._reject)
-        self._center()
+        self.win.grab_set()
+        _apply_icon(self.win)
         self._build()
-
-    def _center(self):
-        self.win.update_idletasks()
-        x = (self.win.winfo_screenwidth()  - 680) // 2
-        y = (self.win.winfo_screenheight() - 580) // 2
-        self.win.geometry(f"680x580+{x}+{y}")
+        _center_window(self.win, 700, 600)
 
     def _build(self):
-        # Header
-        hdr = tk.Frame(self.win, bg=COLORS['bg_sidebar'], pady=12)
-        hdr.pack(fill='x')
-        tk.Label(hdr, text="📜  Contrato de Licencia de Uso de Software",
-                 font=(FONTS['family'], FONTS['subtitle'], 'bold'),
-                 bg=COLORS['bg_sidebar'],
-                 fg=COLORS['text_white']).pack()
-        tk.Label(hdr, text="Debe aceptar los términos para continuar",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg=COLORS['bg_sidebar'], fg='#94a3b8').pack()
+        W = 700
+        # Header degradado
+        _gradient_header(self.win, W, 72,
+                         "📜  Contrato de Licencia de Uso de Software",
+                         "Debe leer y aceptar los términos para continuar usando el sistema")
 
         # Texto del contrato
-        frm_txt = tk.Frame(self.win, bg=COLORS['bg_card'])
-        frm_txt.pack(fill='both', expand=True, padx=16, pady=12)
+        body = tk.Frame(self.win, bg=THEME["ct_bg"])
+        body.pack(fill="both", expand=True, padx=20, pady=(12,0))
 
-        txt = tk.Text(frm_txt, wrap='word', font=("Courier New", 9),
-                      bg='#f8fafc', fg='#1e293b', relief='solid', bd=1,
-                      padx=12, pady=8)
-        sb = ttk.Scrollbar(frm_txt, command=txt.yview)
+        txt_frame = tk.Frame(body, bg=THEME["border"], padx=1, pady=1)
+        txt_frame.pack(fill="both", expand=True)
+
+        txt = tk.Text(txt_frame, wrap="word", font=("Courier New", 9),
+                      bg="#F8FAFC", fg=THEME["txt_primary"],
+                      relief="flat", padx=14, pady=10,
+                      selectbackground=THEME["acc_blue"])
+        sb  = tk.Scrollbar(txt_frame, command=txt.yview)
         txt.configure(yscrollcommand=sb.set)
-        txt.pack(side='left', fill='both', expand=True)
-        sb.pack(side='left', fill='y')
-        txt.insert('1.0', EULA_TEXT)
-        txt.configure(state='disabled')
+        sb.pack(side="right", fill="y")
+        txt.pack(fill="both", expand=True)
+        txt.insert("1.0", EULA_TEXT)
+        txt.configure(state="disabled")
 
-        # Checkbox aceptar
-        self._var_accept = tk.IntVar()
-        frm_chk = tk.Frame(self.win, bg=COLORS['bg_card'])
-        frm_chk.pack(fill='x', padx=16, pady=(0,8))
-        tk.Checkbutton(frm_chk,
-                       text="He leído y acepto los términos del Contrato de Licencia de Uso",
-                       variable=self._var_accept,
-                       bg=COLORS['bg_card'],
-                       font=(FONTS['family'], FONTS['body'], 'bold'),
-                       fg=COLORS['bg_sidebar']).pack(side='left')
+        # Checkbox
+        self._var_chk = tk.IntVar()
+        chk_row = tk.Frame(self.win, bg=THEME["ct_bg"])
+        chk_row.pack(fill="x", padx=20, pady=10)
+        tk.Checkbutton(chk_row,
+                       text="  He leído y acepto los términos del Contrato de Licencia de Uso",
+                       variable=self._var_chk,
+                       bg=THEME["ct_bg"], activebackground=THEME["ct_bg"],
+                       font=(FONT, 10, "bold"), fg=THEME["txt_primary"],
+                       selectcolor=THEME["card_bg"],
+                       cursor="hand2").pack(side="left")
 
         # Botones
-        frm_btn = tk.Frame(self.win, bg=COLORS['bg_card'], pady=10)
-        frm_btn.pack(fill='x', padx=16)
-        tk.Button(frm_btn, text="✅  Acepto y Continuar",
-                  command=self._accept,
-                  bg=COLORS['success'], fg=COLORS['text_white'],
-                  font=(FONTS['family'], FONTS['body'], 'bold'),
-                  relief='flat', padx=16, pady=8, cursor='hand2',
-                  width=22).pack(side='left', padx=(0,8))
-        tk.Button(frm_btn, text="✖  No acepto / Salir",
-                  command=self._reject,
-                  bg=COLORS['danger'], fg=COLORS['text_white'],
-                  font=(FONTS['family'], FONTS['body'], 'bold'),
-                  relief='flat', padx=16, pady=8, cursor='hand2',
-                  width=22).pack(side='left')
+        btn_row = tk.Frame(self.win, bg=THEME["ct_bg"], pady=8)
+        btn_row.pack(fill="x", padx=20)
+        _btn(btn_row, "✅  Acepto y Continuar",
+             self._accept, THEME["acc_green"], THEME["acc_green_dk"]).pack(side="left", padx=(0,10))
+        _btn(btn_row, "✖  No acepto / Salir",
+             self._reject, THEME["acc_rose"], "#BE123C").pack(side="left")
+
+        _footer(self.win)
 
     def _accept(self):
-        if not self._var_accept.get():
+        if not self._var_chk.get():
             messagebox.showwarning("Atención",
-                "Debe marcar la casilla para aceptar el contrato.",
-                parent=self.win)
+                "Debe marcar la casilla para aceptar el contrato.", parent=self.win)
             return
         mark_eula_accepted()
         self.win.destroy()
@@ -208,262 +252,232 @@ class EULAWindow:
         self.on_reject()
 
 
-# ════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════
 #  VENTANA DE ACTIVACIÓN
-# ════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════
 
 class ActivationWindow:
-    """
-    Ventana para ingresar y activar la clave de licencia.
-    on_success() se llama si la activacion es exitosa.
-    on_cancel()  se llama si el usuario cancela.
-    """
-
     def __init__(self, root, on_success, on_cancel=None):
         self.root       = root
         self.on_success = on_success
         self.on_cancel  = on_cancel or (lambda: None)
 
-        # Usar root directamente como ventana (no crear Toplevel dentro)
         self.win = root
-        self.win.title("Activacion de Licencia - Venialgo Sistemas")
-        self.win.geometry("560x480")
-        self.win.configure(bg=COLORS['bg_card'])
+        self.win.title("Activación de Licencia — Venialgo Sistemas")
+        self.win.configure(bg=THEME["ct_bg"])
         self.win.resizable(False, False)
         self.win.protocol("WM_DELETE_WINDOW", self._cancelar)
-        self._center()
+        _apply_icon(self.win)
         self._build()
+        _center_window(self.win, 580, 500)
 
     def _cancelar(self):
         self.win.destroy()
         self.on_cancel()
 
-    def _center(self):
-        self.win.update_idletasks()
-        x = (self.win.winfo_screenwidth()  - 560) // 2
-        y = (self.win.winfo_screenheight() - 480) // 2
-        self.win.geometry(f"560x480+{x}+{y}")
-
     def _build(self):
+        W = 580
         # Header
-        hdr = tk.Frame(self.win, bg='#1e3a5f', pady=16)
-        hdr.pack(fill='x')
-        tk.Label(hdr, text="🔑  Activación de Licencia",
-                 font=(FONTS['family'], 14, 'bold'),
-                 bg='#1e3a5f', fg='white').pack()
-        tk.Label(hdr, text="Sistema de Punto de Venta — Venialgo Sistemas",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg='#1e3a5f', fg='#93c5fd').pack()
+        _gradient_header(self.win, W, 72,
+                         "🔑  Activación de Licencia",
+                         "Sistema de Punto de Venta — Venialgo Sistemas")
 
-        # Card
-        card = tk.Frame(self.win, bg=COLORS['bg_card'], padx=30, pady=20)
-        card.pack(fill='both', expand=True, padx=20, pady=12)
+        body = tk.Frame(self.win, bg=THEME["ct_bg"], padx=28, pady=20)
+        body.pack(fill="both", expand=True)
 
-        # Hardware ID
+        # Hardware ID card
+        from license.license_manager import get_hardware_id
         hwid = get_hardware_id()
-        frm_hw = tk.Frame(card, bg='#f0f9ff', pady=8, padx=12,
-                          relief='solid', bd=1)
-        frm_hw.pack(fill='x', pady=(0,16))
-        tk.Label(frm_hw, text="ID de Hardware de este equipo",
-                 font=(FONTS['family'], FONTS['small'], 'bold'),
-                 bg='#f0f9ff', fg='#0369a1').pack(anchor='w')
-        tk.Label(frm_hw, text=hwid,
-                 font=("Courier New", 12, 'bold'),
-                 bg='#f0f9ff', fg='#0284c7').pack(anchor='w', pady=(4,0))
-        tk.Label(frm_hw,
-                 text="Proporcione este ID a Venialgo Sistemas para obtener su licencia.",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg='#f0f9ff', fg='#64748b').pack(anchor='w', pady=(4,0))
 
-        # Ingreso de clave
-        tk.Label(card, text="Ingrese su Clave de Licencia:",
-                 font=(FONTS['family'], FONTS['body'], 'bold'),
-                 bg=COLORS['bg_card'], fg='#1e293b').pack(anchor='w', pady=(8,4))
+        hw_card = tk.Frame(body, bg=THEME["hw_bg"],
+                           highlightbackground=THEME["hw_border"],
+                           highlightthickness=1, padx=16, pady=12)
+        hw_card.pack(fill="x", pady=(0,18))
 
-        self._var_key = tk.StringVar()
-        tk.Entry(card, textvariable=self._var_key,
-                 font=("Courier New", 11),
-                 width=48, relief='solid', bd=1).pack(fill='x', pady=(0,6))
-        tk.Label(card,
-                 text="Formato: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg=COLORS['bg_card'], fg='#94a3b8').pack(anchor='w')
+        tk.Label(hw_card, text="ID de Hardware de este equipo",
+                 font=(FONT, 9, "bold"), bg=THEME["hw_bg"],
+                 fg=THEME["hw_txt"]).pack(anchor="w")
+        tk.Label(hw_card, text=hwid,
+                 font=("Courier New", 12, "bold"),
+                 bg=THEME["hw_bg"], fg=THEME["acc_blue"]).pack(anchor="w", pady=(4,2))
+        tk.Label(hw_card, text="Proporcione este ID a Venialgo Sistemas para obtener su licencia.",
+                 font=(FONT, 8), bg=THEME["hw_bg"],
+                 fg=THEME["txt_secondary"]).pack(anchor="w")
 
         # Estado actual
-        info = get_license_info()
-        status = info.get('status', '')
-        if status == LicenseStatus.VALID:
-            state_text = (f"✅ Licencia activa — {info.get('days_left','?')} días restantes  "
-                          f"| Vence: {info.get('expiry_date','')}")
-            state_bg = '#f0fdf4'
-            state_fg = '#16a34a'
-        elif status == LicenseStatus.EXPIRED:
-            state_text = "❌ Licencia VENCIDA — Renueve su licencia"
-            state_bg = '#fef2f2'
-            state_fg = '#dc2626'
-        else:
-            state_text = "⚠️ Sin licencia activa en este equipo"
-            state_bg = '#fffbeb'
-            state_fg = '#d97706'
+        from license.license_manager import get_license_info, LicenseStatus
+        info   = get_license_info()
+        status = info.get("status", "")
 
-        frm_status = tk.Frame(card, bg=state_bg, pady=6, padx=10)
-        frm_status.pack(fill='x', pady=(16,0))
-        tk.Label(frm_status, text=state_text,
-                 font=(FONTS['family'], FONTS['small'], 'bold'),
-                 bg=state_bg, fg=state_fg).pack(anchor='w')
+        if status == LicenseStatus.VALID:
+            st_bg, st_fg = "#ECFDF5", "#065F46"
+            st_txt = f"✅  Licencia activa — {info.get('days_left','?')} días restantes | Vence: {info.get('expiry_date','')}"
+        elif status == LicenseStatus.EXPIRED:
+            st_bg, st_fg = "#FEF2F2", "#991B1B"
+            st_txt = "❌  Licencia VENCIDA — Renueve su licencia"
+        else:
+            st_bg, st_fg = "#FFFBEB", "#92400E"
+            st_txt = "⚠️  Sin licencia activa en este equipo"
+
+        status_frame = tk.Frame(body, bg=st_bg,
+                                highlightbackground=st_fg,
+                                highlightthickness=1, padx=12, pady=8)
+        status_frame.pack(fill="x", pady=(0,18))
+        tk.Label(status_frame, text=st_txt, font=(FONT, 9, "bold"),
+                 bg=st_bg, fg=st_fg).pack(anchor="w")
+
+        # Campo clave
+        tk.Label(body, text="Clave de Licencia",
+                 font=(FONT, 10, "bold"), bg=THEME["ct_bg"],
+                 fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,4))
+
+        self._var_key = tk.StringVar()
+        key_frame = tk.Frame(body, bg=THEME["input_brd"], padx=1, pady=1)
+        key_frame.pack(fill="x", pady=(0,4))
+        key_ent = tk.Entry(key_frame, textvariable=self._var_key,
+                           font=("Courier New", 11), relief="flat",
+                           bg=THEME["card_bg"], fg=THEME["txt_primary"],
+                           insertbackground=THEME["acc_blue"])
+        key_ent.pack(fill="x", ipady=7, padx=2)
+        key_ent.bind("<FocusIn>",  lambda e: key_frame.config(bg=THEME["acc_blue"]))
+        key_ent.bind("<FocusOut>", lambda e: key_frame.config(bg=THEME["input_brd"]))
+
+        tk.Label(body, text="Formato: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX",
+                 font=(FONT, 8), bg=THEME["ct_bg"],
+                 fg=THEME["txt_secondary"]).pack(anchor="w", pady=(0,20))
 
         # Botones
-        frm_btn = tk.Frame(card, bg=COLORS['bg_card'])
-        frm_btn.pack(fill='x', pady=(20,0))
-        tk.Button(frm_btn, text="⚡  Activar Licencia",
-                  command=self._activate,
-                  bg=COLORS['success'], fg=COLORS['text_white'],
-                  font=(FONTS['family'], FONTS['body'], 'bold'),
-                  relief='flat', padx=14, pady=9, cursor='hand2',
-                  width=20).pack(side='left', padx=(0,8))
-        tk.Button(frm_btn, text="✖  Cancelar",
-                  command=self.on_cancel,
-                  bg=COLORS['danger'], fg=COLORS['text_white'],
-                  font=(FONTS['family'], FONTS['body'], 'bold'),
-                  relief='flat', padx=14, pady=9, cursor='hand2',
-                  width=14).pack(side='left')
+        btn_row = tk.Frame(body, bg=THEME["ct_bg"])
+        btn_row.pack(anchor="w")
+        _btn(btn_row, "⚡  Activar Licencia",
+             self._activate, THEME["acc_green"], THEME["acc_green_dk"]).pack(side="left", padx=(0,10))
+        _btn(btn_row, "✖  Cancelar",
+             self.on_cancel, "#6B7280", "#4B5563").pack(side="left")
 
-        # Footer info
-        tk.Label(card,
-                 text="📧 davenialgo@proton.me  |  📱 +595 994-686 493",
-                 font=(FONTS['family'], FONTS['small']),
-                 bg=COLORS['bg_card'], fg='#94a3b8').pack(pady=(20,0))
+        _footer(self.win)
 
     def _activate(self):
+        from license.license_manager import activate_license
         key = self._var_key.get().strip()
         if not key:
-            messagebox.showwarning("Atencion",
-                "Ingrese la clave de licencia.", parent=self.win)
+            messagebox.showwarning("Atención", "Ingrese la clave de licencia.", parent=self.win)
             return
-
         ok, msg = activate_license(key)
         if ok:
-            messagebox.showinfo("Activacion exitosa", msg, parent=self.win)
+            messagebox.showinfo("✅ Activación exitosa", msg, parent=self.win)
             self.win.destroy()
             self.on_success()
         else:
-            messagebox.showerror("Error de activacion",
+            messagebox.showerror("Error de activación",
                 msg + "\n\nVerifique que la clave sea correcta.\n"
                       "Si el problema persiste contacte a Venialgo Sistemas:\n"
                       "+595 994-686 493",
                 parent=self.win)
 
 
-# ════════════════════════════════════════════════════════
-#  PANEL DE LICENCIA (dentro del módulo admin)
-# ════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════
+#  PANEL DE LICENCIA (dentro del módulo Configuración)
+# ════════════════════════════════════════════════════════════
 
 class LicensePanel:
-    """
-    Panel de información de licencia para incluir en AdminModule.
-    Uso: LicensePanel(parent_frame)
-    """
-
     def __init__(self, parent):
         self.parent = parent
         self._build()
 
     def _build(self):
-        frm = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        frm.pack(fill='both', expand=True)
+        from license.license_manager import get_license_info, get_hardware_id, LicenseStatus
 
-        # Header
-        tk.Label(frm, text="🔑  Información de Licencia",
-                 font=(FONTS['family'], FONTS['subtitle'], 'bold'),
-                 bg=COLORS['bg_main'], fg=COLORS['primary']).pack(
-            anchor='w', padx=20, pady=(16,4))
-        ttk.Separator(frm).pack(fill='x', padx=20, pady=(0,12))
+        frm = tk.Frame(self.parent, bg=THEME["ct_bg"])
+        frm.pack(fill="both", expand=True, padx=24, pady=20)
 
-        info = get_license_info()
-        status = info.get('status', LicenseStatus.NOT_FOUND)
+        info   = get_license_info()
+        status = info.get("status", LicenseStatus.NOT_FOUND)
 
-        # Tarjeta de estado
+        # ── Estado badge ──────────────────────────────────────
         if status == LicenseStatus.VALID:
-            card_bg, icon, state_lbl = '#f0fdf4', '✅', 'ACTIVA'
-            lbl_fg = '#166534'
+            badge_bg, badge_fg = THEME["acc_green"], THEME["txt_white"]
+            badge_txt = "✅  Sistema Licenciado"
+            card_bg, card_border = "#ECFDF5", "#6EE7B7"
+            card_fg = "#065F46"
         elif status == LicenseStatus.EXPIRED:
-            card_bg, icon, state_lbl = '#fef2f2', '❌', 'VENCIDA'
-            lbl_fg = '#991b1b'
+            badge_bg, badge_fg = THEME["acc_rose"], THEME["txt_white"]
+            badge_txt = "❌  Licencia Vencida"
+            card_bg, card_border = "#FEF2F2", "#FECACA"
+            card_fg = "#991B1B"
         else:
-            card_bg, icon, state_lbl = '#fffbeb', '⚠️', 'NO ACTIVADA'
-            lbl_fg = '#92400e'
+            badge_bg, badge_fg = THEME["acc_amber"], THEME["txt_white"]
+            badge_txt = "⚠️  Sin Licencia"
+            card_bg, card_border = "#FFFBEB", "#FDE68A"
+            card_fg = "#92400E"
 
-        card = tk.Frame(frm, bg=card_bg, padx=24, pady=20,
-                        relief='solid', bd=1)
-        card.pack(fill='x', padx=20, pady=8)
+        badge = tk.Frame(frm, bg=badge_bg, padx=20, pady=10)
+        badge.pack(anchor="w", pady=(0,16))
+        tk.Label(badge, text=badge_txt, font=(FONT, 12, "bold"),
+                 bg=badge_bg, fg=badge_fg).pack()
 
-        tk.Label(card, text=f"{icon}  Licencia {state_lbl}",
-                 font=(FONTS['family'], 14, 'bold'),
-                 bg=card_bg, fg=lbl_fg).pack(anchor='w')
+        # ── Info card ─────────────────────────────────────────
+        card = tk.Frame(frm, bg=card_bg,
+                        highlightbackground=card_border,
+                        highlightthickness=1, padx=20, pady=16)
+        card.pack(fill="x", pady=(0,20))
 
         if status == LicenseStatus.VALID:
             detalles = [
-                ("Cliente:",         info.get('client_id', '-')),
-                ("Vence:",           info.get('expiry_date', '-')),
-                ("Días restantes:",  str(info.get('days_left', '-'))),
-                ("Hardware ID:",     info.get('hwid', get_hardware_id())),
+                ("Cliente:",         info.get("client_id", "—")),
+                ("Vence:",           info.get("expiry_date", "—")),
+                ("Días restantes:",  str(info.get("days_left", "—"))),
+                ("Hardware ID:",     info.get("hwid", get_hardware_id())),
             ]
-            for lbl, val in detalles:
-                rf = tk.Frame(card, bg=card_bg)
-                rf.pack(fill='x', pady=2)
-                tk.Label(rf, text=lbl,
-                         font=(FONTS['family'], FONTS['body'], 'bold'),
-                         bg=card_bg, fg='#374151', width=18, anchor='w').pack(side='left')
-                tk.Label(rf, text=val,
-                         font=(FONTS['family'], FONTS['body']),
-                         bg=card_bg, fg='#1e293b').pack(side='left')
         else:
-            tk.Label(card,
-                     text="Hardware ID: " + get_hardware_id(),
-                     font=("Courier New", 10),
-                     bg=card_bg, fg='#374151').pack(anchor='w', pady=(8,0))
-            tk.Label(card,
-                     text="Contacte a Venialgo Sistemas para obtener su licencia.",
-                     font=(FONTS['family'], FONTS['small']),
-                     bg=card_bg, fg='#64748b').pack(anchor='w', pady=(4,0))
+            detalles = [
+                ("Hardware ID:", get_hardware_id()),
+                ("Estado:",      status),
+            ]
 
-        # Botón activar / renovar
-        btn_lbl = "🔑  Activar Licencia" if status != LicenseStatus.VALID else "🔄  Renovar / Cambiar Licencia"
-        tk.Button(frm, text=btn_lbl,
-                  command=self._open_activation,
-                  bg=COLORS['primary'], fg=COLORS['text_white'],
-                  font=(FONTS['family'], FONTS['body'], 'bold'),
-                  relief='flat', padx=16, pady=9, cursor='hand2').pack(
-            anchor='w', padx=20, pady=(8,0))
+        for lbl, val in detalles:
+            row = tk.Frame(card, bg=card_bg)
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=lbl, font=(FONT, 9, "bold"),
+                     bg=card_bg, fg=card_fg, width=16, anchor="w").pack(side="left")
+            tk.Label(row, text=val, font=("Courier New" if "ID" in lbl else FONT, 10),
+                     bg=card_bg, fg=THEME["txt_primary"]).pack(side="left", padx=4)
 
-        # Contacto
-        frm_contact = tk.LabelFrame(frm, text=" Soporte técnico ",
-                                    bg=COLORS['bg_main'],
-                                    font=(FONTS['family'], FONTS['small'], 'bold'),
-                                    fg=COLORS['primary'], padx=16, pady=12)
-        frm_contact.pack(fill='x', padx=20, pady=20)
-        contactos = [
-            ("📧 Email:",    "davenialgo@proton.me"),
-            ("📱 WhatsApp:", "+595 994-686 493"),
-            ("🌐 Web:",      "www.venialgosistemas.com"),
-        ]
-        for lbl, val in contactos:
-            rf = tk.Frame(frm_contact, bg=COLORS['bg_main'])
-            rf.pack(fill='x', pady=2)
-            tk.Label(rf, text=lbl,
-                     font=(FONTS['family'], FONTS['body'], 'bold'),
-                     bg=COLORS['bg_main'], fg='#374151',
-                     width=14, anchor='w').pack(side='left')
-            tk.Label(rf, text=val,
-                     font=(FONTS['family'], FONTS['body']),
-                     bg=COLORS['bg_main'], fg=COLORS['primary']).pack(side='left')
+        if status != LicenseStatus.VALID:
+            tk.Label(card,
+                     text="Contacte a Venialgo Sistemas para obtener o renovar su licencia.",
+                     font=(FONT, 9), bg=card_bg, fg=THEME["txt_secondary"]).pack(anchor="w", pady=(8,0))
+
+        # ── Botón activar ─────────────────────────────────────
+        btn_txt = "🔑  Activar Licencia" if status != LicenseStatus.VALID else "🔄  Renovar / Cambiar Licencia"
+        _btn(frm, btn_txt, self._open_activation,
+             THEME["acc_blue"], THEME["acc_blue_dk"]).pack(anchor="w", pady=(0,24))
+
+        # ── Contacto ──────────────────────────────────────────
+        tk.Frame(frm, bg=THEME["border"], height=1).pack(fill="x", pady=(0,16))
+        tk.Label(frm, text="¿Necesitás una licencia?",
+                 font=(FONT, 11, "bold"), bg=THEME["ct_bg"],
+                 fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,10))
+
+        for icon, label, val in [
+            ("✉",  "Email:",    CONTACT["email"]),
+            ("📱", "WhatsApp:", CONTACT["whatsapp"]),
+            ("🌐", "Web:",      CONTACT["web"]),
+        ]:
+            row = tk.Frame(frm, bg=THEME["ct_bg"])
+            row.pack(anchor="w", pady=3)
+            tk.Label(row, text=f"{icon}  {label}",
+                     font=(FONT, 10, "bold"), bg=THEME["ct_bg"],
+                     fg=THEME["txt_secondary"], width=12, anchor="w").pack(side="left")
+            tk.Label(row, text=val, font=(FONT, 10),
+                     bg=THEME["ct_bg"], fg=THEME["acc_blue"],
+                     cursor="hand2").pack(side="left")
 
     def _open_activation(self):
         win = tk.Toplevel(self.parent)
         win.withdraw()
+        _apply_icon(win)
         ActivationWindow(win,
-                         on_success=lambda: (win.destroy(),
-                                             self._refresh()),
+                         on_success=lambda: (win.destroy(), self._refresh()),
                          on_cancel=win.destroy)
         win.deiconify()
 

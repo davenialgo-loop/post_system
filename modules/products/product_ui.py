@@ -1,5 +1,9 @@
 """Módulo Gestión de Productos — Diseño moderno Venialgo POS"""
 import tkinter as tk
+try:
+    from utils.window_icon import set_icon as _set_icon
+except ImportError:
+    def _set_icon(w): pass
 from tkinter import ttk, messagebox
 from config.settings import COLORS, FONTS as _F, SPACING, BUTTON_STYLES
 from utils.validators import validate_required_field
@@ -142,9 +146,11 @@ class ProductModule:
 
     def _show_dialog(self,mode,product_id=None):
         title="Nuevo Producto" if mode=='add' else "Editar Producto"
-        dlg=tk.Toplevel(self.parent); dlg.title(title)
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg)
+        _set_icon(dlg); dlg.title(title)
         dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
-        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,500,620)
+        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,500,720)
 
         # Botones PRIMERO
         btn_bar=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12)
@@ -156,7 +162,13 @@ class ProductModule:
         tk.Label(hdr,text=f"{'📦 Nuevo' if mode=='add' else '✏ Editar'} Producto",
                  font=(FONT,13,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
 
-        body=tk.Frame(dlg,bg=THEME["ct_bg"],padx=24,pady=16); body.pack(fill='both',expand=True)
+        canvas=tk.Canvas(dlg,bg=THEME["ct_bg"],highlightthickness=0)
+        canvas.pack(fill='both',expand=True)
+        body=tk.Frame(canvas,bg=THEME["ct_bg"],padx=24,pady=16)
+        canvas.create_window((0,0),window=body,anchor='nw',tags='body')
+        def _rsz(e): canvas.itemconfig('body',width=e.width)
+        def _srg(e): canvas.configure(scrollregion=canvas.bbox('all'))
+        canvas.bind('<Configure>',_rsz); body.bind('<Configure>',_srg)
 
         fields={}
         def lbl_entry(key,label,required=False):

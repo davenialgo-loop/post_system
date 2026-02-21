@@ -4,6 +4,10 @@ from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 from config.settings import COLORS, FONTS as _F, SPACING, BUTTON_STYLES, CREDIT
 from utils.formatters import format_currency, format_date
+try:
+    from utils.window_icon import set_icon as _set_icon
+except ImportError:
+    def _set_icon(w): pass
 
 THEME = {"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827",
     "txt_primary":"#111827","txt_secondary":"#6B7280","txt_white":"#FFFFFF",
@@ -13,21 +17,36 @@ THEME = {"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"
     "row_odd":"#F9FAFB","row_even":"#FFFFFF"}
 FONT="Segoe UI"
 
-def _btn(parent,text,cmd,bg,icon="",**kw):
-    t=f"{icon}  {text}" if icon else text
+def _btn(parent, text, cmd, bg, icon="", **kw):
+    t = (icon + "  " + text) if icon else text
+    _DISABLED = "#9CA3AF"
     def _dk(c):
-        r,g,b=int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
-        return f"#{max(0,int(r*.82)):02x}{max(0,int(g*.82)):02x}{max(0,int(b*.82)):02x}"
-    _en=[True]
-    lbl=tk.Label(parent,text=t,font=(FONT,10,'bold'),bg=bg,fg="#fff",
-                 cursor='hand2',padx=14,pady=8,**kw)
-    def _click(_=None):
-        if _en[0]: lbl.config(bg=_dk(bg)); lbl.after(120,lambda:lbl.config(bg=bg)); cmd()
-    lbl.bind('<Enter>',lambda _:(lbl.config(bg=_dk(bg)) if _en[0] else None))
-    lbl.bind('<Leave>',lambda _:lbl.config(bg=bg if _en[0] else "#9CA3AF"))
-    lbl.bind('<ButtonRelease-1>',_click)
-    lbl.enable =lambda:(setattr(type(lbl),'_e',True) or _en.__setitem__(0,True)  or lbl.config(bg=bg,    fg="#fff",cursor='hand2'))
-    lbl.disable=lambda:(setattr(type(lbl),'_e',False)or _en.__setitem__(0,False) or lbl.config(bg="#9CA3AF",fg="#fff",cursor='arrow'))
+        r,g,b = int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)
+        return "#{:02x}{:02x}{:02x}".format(max(0,int(r*.82)),max(0,int(g*.82)),max(0,int(b*.82)))
+    _state = {"on": False}
+    lbl = tk.Label(parent, text=t, font=(FONT,10,"bold"),
+                   bg=_DISABLED, fg="#ffffff",
+                   cursor="arrow", padx=14, pady=8, **kw)
+    def _on_enter(_=None):
+        if _state["on"]: lbl.config(bg=_dk(bg))
+    def _on_leave(_=None):
+        lbl.config(bg=bg if _state["on"] else _DISABLED)
+    def _on_click(_=None):
+        if _state["on"] and cmd:
+            lbl.config(bg=_dk(_dk(bg)))
+            lbl.after(120, lambda: lbl.config(bg=bg))
+            cmd()
+    lbl.bind("<Enter>",           _on_enter)
+    lbl.bind("<Leave>",           _on_leave)
+    lbl.bind("<ButtonRelease-1>", _on_click)
+    def enable():
+        _state["on"] = True
+        lbl.config(bg=bg, fg="#ffffff", cursor="hand2")
+    def disable():
+        _state["on"] = False
+        lbl.config(bg=_DISABLED, fg="#ffffff", cursor="arrow")
+    lbl.enable  = enable
+    lbl.disable = disable
     return lbl
 
 def _setup_styles():
@@ -120,11 +139,11 @@ class CreditsModule:
         act=tk.Frame(self.parent,bg=bg,padx=24,pady=10)
         act.pack(fill='x')
         self.btn_pay=_btn(act,"Registrar Pago",self.show_payment_dialog,THEME["acc_green"],"💰")
-        self.btn_pay.disable(); self.btn_pay.pack(side='left',padx=(0,8))
+        self.btn_pay.pack(side='left',padx=(0,8))
         self.btn_hist=_btn(act,"Ver Historial",self.show_payment_history,THEME["acc_blue"],"📋")
-        self.btn_hist.disable(); self.btn_hist.pack(side='left',padx=(0,8))
+        self.btn_hist.pack(side='left',padx=(0,8))
         self.btn_date=_btn(act,"Cambiar Fecha",self.show_change_date_dialog,THEME["btn_secondary"],"📅")
-        self.btn_date.disable(); self.btn_date.pack(side='left')
+        self.btn_date.pack(side='left')
 
     def load_credits(self):
         for i in self.tree.get_children(): self.tree.delete(i)
@@ -166,15 +185,16 @@ class CreditsModule:
             self.btn_hist.enable()
         else:
             self.selected_credit_id=None
-            for b in [self.btn_pay,self.btn_hist,self.btn_date]: b.config(state='disabled')
+            for b in [self.btn_pay,self.btn_hist,self.btn_date]: b.disable()
 
     def show_credit_details(self):
         if not self.selected_credit_id: return
         c=self.db.get_credit_sale_by_id(self.selected_credit_id)
         if not c: return
-        dlg=tk.Toplevel(self.parent); dlg.title(f"Crédito #{c['id']}")
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg); dlg.title(f"Crédito #{c['id']}")
         dlg.configure(bg=THEME["card_bg"]); dlg.resizable(False,False)
-        dlg.transient(self.parent); _center(dlg,480,420)
+        dlg.transient(self.parent); _center(dlg,480,460)
         hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=14)
         hdr.pack(fill='x')
         tk.Label(hdr,text=f"Crédito #{c['id']} — {c.get('customer_name','')}",
@@ -200,9 +220,10 @@ class CreditsModule:
         if not self.selected_credit_id: return
         c=self.db.get_credit_sale_by_id(self.selected_credit_id)
         if not c: return
-        dlg=tk.Toplevel(self.parent); dlg.title("Registrar Pago")
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg); dlg.title("Registrar Pago")
         dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
-        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,420,380)
+        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,420,440)
 
         # Botones PRIMERO
         btn_bar=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12)
@@ -214,8 +235,13 @@ class CreditsModule:
         tk.Label(hdr,text=f"💰  Registrar Pago — {c.get('customer_name','')}",
                  font=(FONT,12,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
 
-        body=tk.Frame(dlg,bg=THEME["ct_bg"],padx=20,pady=16)
-        body.pack(fill='both',expand=True)
+        canvas=tk.Canvas(dlg,bg=THEME["ct_bg"],highlightthickness=0)
+        canvas.pack(fill='both',expand=True)
+        body=tk.Frame(canvas,bg=THEME["ct_bg"],padx=20,pady=16)
+        canvas.create_window((0,0),window=body,anchor='nw',tags='body')
+        def _rsz(e): canvas.itemconfig('body',width=e.width)
+        def _srg(e): canvas.configure(scrollregion=canvas.bbox('all'))
+        canvas.bind('<Configure>',_rsz); body.bind('<Configure>',_srg)
         tk.Label(body,text=f"Saldo actual: {format_currency(c.get('remaining_balance',0))}",
                  font=(FONT,12,'bold'),bg=THEME["ct_bg"],fg=THEME["acc_rose"]).pack(anchor='w',pady=(0,4))
         tk.Label(body,text=f"Cuota sugerida: {format_currency(c.get('installment_amount',0))}",
@@ -255,7 +281,8 @@ class CreditsModule:
         if not self.selected_credit_id: return
         c=self.db.get_credit_sale_by_id(self.selected_credit_id)
         payments=self.db.get_credit_payments(self.selected_credit_id)
-        dlg=tk.Toplevel(self.parent); dlg.title("Historial de Pagos")
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg); dlg.title("Historial de Pagos")
         dlg.configure(bg=THEME["ct_bg"]); dlg.transient(self.parent); _center(dlg,600,440)
         hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12); hdr.pack(fill='x')
         tk.Label(hdr,text=f"📋  Historial — {c.get('customer_name','')}",
@@ -284,9 +311,10 @@ class CreditsModule:
     def show_change_date_dialog(self):
         if not self.selected_credit_id: return
         c=self.db.get_credit_sale_by_id(self.selected_credit_id)
-        dlg=tk.Toplevel(self.parent); dlg.title("Cambiar Fecha de Pago")
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg); dlg.title("Cambiar Fecha de Pago")
         dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
-        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,400,260)
+        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,400,300)
         # Botones PRIMERO
         btn_bar=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12)
         btn_bar.pack(fill='x',side='bottom')

@@ -1,5 +1,9 @@
 """Módulo Gestión de Clientes — Diseño moderno Venialgo POS"""
 import tkinter as tk
+try:
+    from utils.window_icon import set_icon as _set_icon
+except ImportError:
+    def _set_icon(w): pass
 from tkinter import ttk, messagebox
 from config.settings import FONTS as _F
 from utils.validators import validate_required_field
@@ -151,7 +155,9 @@ class CustomerModule:
 
     def _show_dialog(self,mode,customer_id=None):
         title="Nuevo Cliente" if mode=='add' else "Editar Cliente"
-        dlg=tk.Toplevel(self.parent); dlg.title(title)
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg)
+        _set_icon(dlg); dlg.title(title)
         dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
         dlg.transient(self.parent); dlg.grab_set(); _center(dlg,480,560)
 
@@ -163,7 +169,13 @@ class CustomerModule:
         tk.Label(hdr,text=f"{'👥 Nuevo' if mode=='add' else '✏ Editar'} Cliente",
                  font=(FONT,13,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
 
-        body=tk.Frame(dlg,bg=THEME["ct_bg"],padx=24,pady=16); body.pack(fill='both',expand=True)
+        canvas=tk.Canvas(dlg,bg=THEME["ct_bg"],highlightthickness=0)
+        canvas.pack(fill='both',expand=True)
+        body=tk.Frame(canvas,bg=THEME["ct_bg"],padx=24,pady=16)
+        canvas.create_window((0,0),window=body,anchor='nw',tags='body')
+        def _rsz(e): canvas.itemconfig('body',width=e.width)
+        def _srg(e): canvas.configure(scrollregion=canvas.bbox('all'))
+        canvas.bind('<Configure>',_rsz); body.bind('<Configure>',_srg)
 
         fields={}
         def lbl_entry(key,label,required=False):
@@ -219,7 +231,9 @@ class CustomerModule:
         credits=self.db.get_all_credit_sales()
         cid=self.selected_customer_id
         client_credits=[x for x in credits if x.get('customer_id')==cid or x.get('cliente_id')==cid]
-        dlg=tk.Toplevel(self.parent); dlg.title(f"Créditos — {c.get('name',c.get('nombre',''))}")
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg)
+        _set_icon(dlg); dlg.title(f"Créditos — {c.get('name',c.get('nombre',''))}")
         dlg.configure(bg=THEME["ct_bg"]); dlg.transient(self.parent); _center(dlg,620,400)
         hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12); hdr.pack(fill='x')
         tk.Label(hdr,text=f"💳  Créditos de {c.get('name',c.get('nombre',''))}",

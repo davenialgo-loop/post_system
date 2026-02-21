@@ -35,7 +35,8 @@ _ensure_tables()
 
 THEME = {
     # Sidebar
-    "sb_bg":        "#111827",   # Casi negro (gray-900)
+    "sb_bg":        "#0D1B4B",   # Azul marino profundo (igual que login)
+    "sb_bg_mid":    "#1A3A8F",   # Azul medio (extremo inferior del gradiente)
     "sb_hover":     "#1F2937",   # gray-800
     "sb_active":    "#1D4ED8",   # blue-700 — estado activo
     "sb_active_bg": "#1E3A8A",   # blue-900 bg para activo
@@ -296,6 +297,7 @@ class POSApp:
         self.root.minsize(1024, 650)
         self.root.configure(bg=THEME["sb_bg"])
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._set_window_icon(self.root)
 
         self.db = DatabaseManager()
         backup_service.start()
@@ -303,6 +305,43 @@ class POSApp:
         self._setup_styles()
         self._build_layout()
         self._show_home()
+
+    # ── Ícono de ventana ─────────────────────────────────────
+    def _set_window_icon(self, window):
+        """Aplica el ícono de Venialgo a cualquier ventana Tk o Toplevel."""
+        import os, sys
+        # Rutas donde puede estar el .ico (desarrollo y producción)
+        base = os.path.dirname(os.path.abspath(
+            sys.executable if getattr(sys,'frozen',False) else __file__))
+        candidates = [
+            os.path.join(base, 'assets', 'venialgosist.ico'),
+            os.path.join(base, 'assets', 'app_icon.ico'),
+            os.path.join(ROOT_DIR, 'assets', 'venialgosist.ico'),
+            os.path.join(ROOT_DIR, 'assets', 'app_icon.ico'),
+        ]
+        for path in candidates:
+            if os.path.isfile(path):
+                try:
+                    window.iconbitmap(path)
+                    return
+                except Exception:
+                    pass
+        # Fallback: ícono desde PNG con PhotoImage (sin .ico)
+        png_candidates = [
+            os.path.join(base, 'assets', 'VenialgoSistemasLogo.png'),
+            os.path.join(ROOT_DIR, 'assets', 'VenialgoSistemasLogo.png'),
+        ]
+        for path in png_candidates:
+            if os.path.isfile(path):
+                try:
+                    from PIL import Image, ImageTk
+                    img = Image.open(path).resize((32,32), Image.LANCZOS)
+                    photo = ImageTk.PhotoImage(img)
+                    window.iconphoto(True, photo)
+                    window._icon_ref = photo  # evitar GC
+                    return
+                except Exception:
+                    pass
 
     # ── Estilos globales ──────────────────────────────────────
     def _setup_styles(self):
@@ -332,9 +371,38 @@ class POSApp:
 
     # ── Layout raíz: sidebar + main ───────────────────────────
     def _build_layout(self):
-        # Columna izquierda (sidebar fija 220px)
-        self._sidebar = tk.Frame(self.root, bg=THEME["sb_bg"], width=220)
-        self._sidebar.pack(side='left', fill='y')
+        # Columna izquierda (sidebar fija 220px) — con degradado
+        SB_W = 220
+        self._sb_canvas = tk.Canvas(self.root, width=SB_W, highlightthickness=0, bd=0)
+        self._sb_canvas.pack(side='left', fill='y')
+
+        # Frame contenedor sobre el canvas
+        self._sidebar = tk.Frame(self._sb_canvas, bg=THEME["sb_bg"], width=SB_W)
+        self._sb_win  = self._sb_canvas.create_window(0, 0, anchor='nw',
+                                                       window=self._sidebar,
+                                                       width=SB_W)
+
+        def _draw_gradient(event=None):
+            h = self._sb_canvas.winfo_height() or 800
+            self._sb_canvas.delete("grad")
+            r1,g1,b1 = 0x0D,0x1B,0x4B   # #0D1B4B top
+            r2,g2,b2 = 0x1A,0x3A,0x8F   # #1A3A8F bottom
+            for i in range(h):
+                t = i / h
+                r = int(r1+(r2-r1)*t); g = int(g1+(g2-g1)*t); b = int(b1+(b2-b1)*t)
+                self._sb_canvas.create_line(0,i,SB_W,i,
+                    fill=f"#{r:02x}{g:02x}{b:02x}", tags="grad")
+            self._sb_canvas.tag_lower("grad")
+            self._sb_canvas.itemconfig(self._sb_win, height=max(h, self._sidebar.winfo_reqheight()))
+
+        def _update_height(event=None):
+            h = max(self._sb_canvas.winfo_height(), self._sidebar.winfo_reqheight())
+            self._sb_canvas.itemconfig(self._sb_win, height=h)
+            _draw_gradient()
+
+        self._sb_canvas.bind("<Configure>", _update_height)
+        self._sidebar.bind("<Configure>",   _update_height)
+
         self._sidebar.pack_propagate(False)
 
         # Columna derecha (topbar + contenido)
@@ -349,15 +417,38 @@ class POSApp:
     def _build_sidebar(self):
         sb = self._sidebar
 
-        # Logo
-        logo_area = tk.Frame(sb, bg=THEME["sb_bg"], pady=20)
+        # Logo — muestra logo de empresa si está configurado, o círculo con inicial
+        logo_area = tk.Frame(sb, bg=THEME["sb_bg"], pady=14)
         logo_area.pack(fill='x')
+        self._sb_logo_area = logo_area   # referencia para refresh
 
-        logo_circle = tk.Frame(logo_area, bg=THEME["sb_logo_bg"], width=38, height=38)
-        logo_circle.pack_propagate(False)
-        logo_circle.pack(side='left', padx=(20, 10))
-        tk.Label(logo_circle, text="V", font=(FONT, 16, 'bold'),
-                 bg=THEME["sb_logo_bg"], fg=THEME["txt_white"]).pack(expand=True)
+        # Intentar cargar logo de la empresa desde la BD
+        _logo_shown = False
+        try:
+            from utils.company_header import get_company
+            from PIL import Image, ImageTk
+            _co = get_company()
+            _logo_path = _co.get("logo_path","")
+            if _logo_path and __import__('os').path.isfile(_logo_path):
+                _img = Image.open(_logo_path).convert("RGBA")
+                _img.thumbnail((42,42), Image.LANCZOS)
+                # Pegar sobre fondo transparente cuadrado
+                _canvas_img = Image.new("RGBA",(42,42),(0,0,0,0))
+                _ox=(42-_img.width)//2; _oy=(42-_img.height)//2
+                _canvas_img.paste(_img,(_ox,_oy),_img)
+                self._sb_logo_photo = ImageTk.PhotoImage(_canvas_img)
+                tk.Label(logo_area, image=self._sb_logo_photo,
+                         bg=THEME["sb_bg"]).pack(side='left', padx=(16,10))
+                _logo_shown = True
+        except Exception:
+            pass
+
+        if not _logo_shown:
+            logo_circle = tk.Frame(logo_area, bg=THEME["sb_logo_bg"], width=38, height=38)
+            logo_circle.pack_propagate(False)
+            logo_circle.pack(side='left', padx=(20, 10))
+            tk.Label(logo_circle, text=self._empresa[:1].upper(), font=(FONT, 16, 'bold'),
+                     bg=THEME["sb_logo_bg"], fg=THEME["txt_white"]).pack(expand=True)
 
         tk.Label(logo_area, text=self._empresa,
                  font=(FONT, 11, 'bold'),
@@ -365,7 +456,7 @@ class POSApp:
                  wraplength=140, justify='left').pack(side='left')
 
         # Separador
-        tk.Frame(sb, bg="#1F2937", height=1).pack(fill='x', padx=16, pady=(0, 10))
+        tk.Frame(sb, bg="#1E3473", height=1).pack(fill='x', padx=16, pady=(0, 10))
 
         # Label sección
         tk.Label(sb, text="NAVEGACIÓN",
@@ -398,7 +489,7 @@ class POSApp:
         tk.Frame(sb, bg=THEME["sb_bg"]).pack(fill='both', expand=True)
 
         # Separador
-        tk.Frame(sb, bg="#1F2937", height=1).pack(fill='x', padx=16, pady=8)
+        tk.Frame(sb, bg="#1E3473", height=1).pack(fill='x', padx=16, pady=8)
 
         # Info backup
         self._lbl_backup = tk.Label(sb,
@@ -716,6 +807,48 @@ class POSApp:
         co = get_company()
         self._empresa = co.get("razon_social") or "Venialgo Sistemas"
         self.root.title(f"{self._empresa} — POS v{APP_VERSION}")
+        # Refrescar logo del sidebar sin reconstruir todo el sidebar
+        self._refresh_sidebar_logo(co)
+
+    def _refresh_sidebar_logo(self, co=None):
+        """Reconstruye solo el área del logo en el sidebar."""
+        if not hasattr(self, "_sb_logo_area"):
+            return
+        if co is None:
+            co = get_company()
+        logo_area = self._sb_logo_area
+        # Destruir widgets actuales del logo_area
+        for w in logo_area.winfo_children():
+            w.destroy()
+        # Reconstruir
+        _logo_shown = False
+        try:
+            from PIL import Image, ImageTk
+            import os as _os
+            _logo_path = co.get("logo_path","")
+            if _logo_path and _os.path.isfile(_logo_path):
+                _img = Image.open(_logo_path).convert("RGBA")
+                _img.thumbnail((42,42), Image.LANCZOS)
+                _canvas_img = Image.new("RGBA",(42,42),(0,0,0,0))
+                _ox=(42-_img.width)//2; _oy=(42-_img.height)//2
+                _canvas_img.paste(_img,(_ox,_oy),_img)
+                self._sb_logo_photo = ImageTk.PhotoImage(_canvas_img)
+                tk.Label(logo_area, image=self._sb_logo_photo,
+                         bg=THEME["sb_bg"]).pack(side='left', padx=(16,10))
+                _logo_shown = True
+        except Exception:
+            pass
+        if not _logo_shown:
+            logo_circle = tk.Frame(logo_area, bg=THEME["sb_logo_bg"], width=38, height=38)
+            logo_circle.pack_propagate(False)
+            logo_circle.pack(side='left', padx=(20,10))
+            tk.Label(logo_circle, text=self._empresa[:1].upper(),
+                     font=(FONT,16,'bold'),
+                     bg=THEME["sb_logo_bg"], fg=THEME["txt_white"]).pack(expand=True)
+        tk.Label(logo_area, text=self._empresa,
+                 font=(FONT,11,'bold'),
+                 bg=THEME["sb_bg"], fg=THEME["txt_white"],
+                 wraplength=140, justify='left').pack(side='left')
 
     # ── CIERRE / LOGOUT ───────────────────────────────────────
     def _on_close(self):

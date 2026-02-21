@@ -3,6 +3,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 from utils.formatters import format_currency
+try:
+    from utils.window_icon import set_icon as _set_icon
+except ImportError:
+    def _set_icon(w): pass
+
 
 THEME={"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827",
     "txt_primary":"#111827","txt_secondary":"#6B7280","txt_white":"#FFFFFF",
@@ -191,7 +196,8 @@ class ReportsModule:
         details=self.db.get_sale_details(sale_id)
         if not details: return
         sale=next((s for s in self.sales_data if s.get('id')==sale_id),{})
-        dlg=tk.Toplevel(self.parent); dlg.title(f"Venta #{sale_id}")
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg); dlg.title(f"Venta #{sale_id}")
         dlg.configure(bg=THEME["ct_bg"]); dlg.transient(self.parent); _center(dlg,580,460)
         hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12); hdr.pack(fill='x')
         tk.Label(hdr,text=f"🧾  Venta #{sale_id} — {sale.get('customer_name','') or 'Consumidor Final'}",

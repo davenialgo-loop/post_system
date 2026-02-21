@@ -1,3 +1,8 @@
+try:
+    from utils.window_icon import set_icon as _set_icon
+except ImportError:
+    def _set_icon(w): pass
+
 """Módulo Administración/Configuración — Diseño moderno Venialgo POS"""
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -103,10 +108,14 @@ class AdminModule:
 
     # ── TAB 1: EMPRESA ────────────────────────────────────────
     def _build_empresa_tab(self):
+        import os, sqlite3, shutil
+        from tkinter import filedialog
+
         outer=tk.Frame(self._tab_area,bg=THEME["card_border"])
         outer.pack(fill='both',expand=True)
         card=tk.Frame(outer,bg=THEME["card_bg"],padx=28,pady=24)
         card.pack(fill='both',expand=True,padx=1,pady=1)
+
         tk.Label(card,text="Datos de la Empresa",font=(FONT,13,'bold'),
                  bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w',pady=(0,16))
         tk.Frame(card,bg=THEME["card_border"],height=1).pack(fill='x',pady=(0,16))
@@ -116,6 +125,94 @@ class AdminModule:
             co=get_company()
         except: co={}
 
+        # ── Sección logo ──────────────────────────────────────────
+        logo_section=tk.Frame(card,bg=THEME["card_bg"])
+        logo_section.pack(fill='x',pady=(0,20))
+
+        # Panel izquierdo: preview
+        preview_frame=tk.Frame(logo_section,bg=THEME["ct_bg"],
+                               width=130,height=90,relief='groove',bd=1)
+        preview_frame.pack(side='left',padx=(0,20))
+        preview_frame.pack_propagate(False)
+
+        self._logo_preview_lbl=tk.Label(preview_frame,bg=THEME["ct_bg"],
+                                         text="Sin logo",font=(FONT,9),
+                                         fg=THEME["txt_secondary"])
+        self._logo_preview_lbl.pack(expand=True)
+        self._logo_photo_ref=None
+
+        def _refresh_logo_preview(path=""):
+            """Carga y muestra el logo en el preview."""
+            if not path:
+                path=co.get("logo_path","")
+            if path and os.path.isfile(path):
+                try:
+                    from PIL import Image, ImageTk
+                    img=Image.open(path).convert("RGBA")
+                    img.thumbnail((126,86),Image.LANCZOS)
+                    # fondo blanco para PNG con transparencia
+                    bg_img=Image.new("RGBA",(126,86),(240,242,245,255))
+                    ox=(126-img.width)//2; oy=(86-img.height)//2
+                    bg_img.paste(img,(ox,oy),img)
+                    photo=ImageTk.PhotoImage(bg_img.convert("RGB"))
+                    self._logo_photo_ref=photo
+                    self._logo_preview_lbl.config(image=photo,text="")
+                    return
+                except Exception:
+                    pass
+            self._logo_photo_ref=None
+            self._logo_preview_lbl.config(image="",text="Sin logo")
+
+        _refresh_logo_preview()
+
+        # Panel derecho: botones y nombre de archivo
+        logo_right=tk.Frame(logo_section,bg=THEME["card_bg"])
+        logo_right.pack(side='left',fill='both',expand=True)
+
+        tk.Label(logo_right,text="Logo de la Empresa",font=(FONT,10,'bold'),
+                 bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w')
+        tk.Label(logo_right,text="Formatos: PNG, JPG, WEBP · Recomendado: fondo transparente",
+                 font=(FONT,8),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(2,10))
+
+        self._logo_path_var=tk.StringVar(value=co.get("logo_path",""))
+        lbl_path=tk.Label(logo_right,textvariable=self._logo_path_var,
+                          font=(FONT,8),bg=THEME["card_bg"],fg=THEME["acc_blue"],
+                          wraplength=260,justify='left',cursor='hand2')
+        lbl_path.pack(anchor='w',pady=(0,8))
+
+        def _choose_logo():
+            path=filedialog.askopenfilename(
+                title="Seleccionar logo",
+                filetypes=[("Imágenes","*.png *.jpg *.jpeg *.webp *.bmp"),
+                           ("Todos","*.*")])
+            if not path: return
+            # Copiar a assets/ para portabilidad
+            try:
+                assets_dir=os.path.join(os.path.dirname(
+                    os.path.abspath(__file__)),"..","..","assets")
+                os.makedirs(assets_dir,exist_ok=True)
+                ext=os.path.splitext(path)[1].lower()
+                dest=os.path.join(assets_dir,"company_logo"+ext)
+                shutil.copy2(path,dest)
+                path=os.path.abspath(dest)
+            except Exception:
+                pass  # si falla la copia, usar ruta original
+            self._logo_path_var.set(path)
+            _refresh_logo_preview(path)
+
+        def _remove_logo():
+            self._logo_path_var.set("")
+            _refresh_logo_preview("")
+
+        btn_logo_row=tk.Frame(logo_right,bg=THEME["card_bg"])
+        btn_logo_row.pack(anchor='w')
+        _btn(btn_logo_row,"Subir logo",_choose_logo,THEME["acc_blue"],"🖼").pack(side='left',padx=(0,8))
+        _btn(btn_logo_row,"Quitar",_remove_logo,THEME["btn_secondary"],"✕").pack(side='left')
+
+        # ── Separador ────────────────────────────────────────────
+        tk.Frame(card,bg=THEME["card_border"],height=1).pack(fill='x',pady=(0,16))
+
+        # ── Campos de texto ───────────────────────────────────────
         fields={}
         labels=[("razon_social","Razón Social / Nombre *"),("ruc","RUC / RUC-DV"),
                 ("direccion","Dirección"),("ciudad","Ciudad / Departamento"),
@@ -135,15 +232,55 @@ class AdminModule:
             if co.get(key): e.insert(0,str(co.get(key,'')))
             fields[key]=e
 
+        # ── Guardar ───────────────────────────────────────────────
         def save_company():
             data={k:fields[k].get().strip() for k in fields}
+            data["logo_path"]=self._logo_path_var.get().strip()
             if not data.get('razon_social'):
                 messagebox.showerror("Error","Razón Social es requerida"); return
             try:
-                self.db.update_company_info(**data)
+                # Migrar esquema: agregar columnas que puedan faltar en BD antigua
+                _extra_cols = {
+                    "ciudad":    "TEXT DEFAULT ''",
+                    "email":     "TEXT DEFAULT ''",
+                    "web":       "TEXT DEFAULT ''",
+                    "logo_path": "TEXT DEFAULT ''",
+                }
+                with self.db._conn() as _mc:
+                    _existing = [r[1] for r in
+                                 _mc.execute("PRAGMA table_info(empresa)").fetchall()]
+                    for _col, _typedef in _extra_cols.items():
+                        if _col not in _existing:
+                            _mc.execute(
+                                f"ALTER TABLE empresa ADD COLUMN {_col} {_typedef}")
+                    _mc.commit()
+
+                # Construir UPDATE solo con columnas que existen en la BD
+                with self.db._conn() as _mc:
+                    _cols = [r[1] for r in
+                             _mc.execute("PRAGMA table_info(empresa)").fetchall()]
+                    _mapping = {
+                        "razon_social": data.get("razon_social",""),
+                        "ruc":          data.get("ruc",""),
+                        "telefono":     data.get("telefono",""),
+                        "direccion":    data.get("direccion",""),
+                        "ciudad":       data.get("ciudad",""),
+                        "email":        data.get("email",""),
+                        "web":          data.get("web",""),
+                        "logo_path":    data.get("logo_path",""),
+                        "correo":       data.get("email",""),  # alias legacy
+                    }
+                    # Filtrar solo columnas que existen
+                    _save = {k:v for k,v in _mapping.items() if k in _cols}
+                    _set  = ", ".join(f"{k}=?" for k in _save)
+                    _vals = list(_save.values())
+                    _mc.execute(f"UPDATE empresa SET {_set} WHERE id=1", _vals)
+                    _mc.commit()
+
                 messagebox.showinfo("✅","Datos de empresa guardados correctamente")
                 if self.on_company_saved: self.on_company_saved()
-            except Exception as e: messagebox.showerror("Error",str(e))
+            except Exception as ex:
+                messagebox.showerror("Error al guardar", str(ex))
 
         btn_row=tk.Frame(card,bg=THEME["card_bg"]); btn_row.pack(anchor='w',pady=(20,0))
         _btn(btn_row,"Guardar Datos",save_company,THEME["acc_green"],"💾").pack(side='left')
@@ -199,9 +336,10 @@ class AdminModule:
 
     def _user_dialog(self,mode,user_id=None):
         title="Nuevo Usuario" if mode=='add' else "Editar Usuario"
-        dlg=tk.Toplevel(self.parent); dlg.title(title)
+        dlg=tk.Toplevel(self.parent)
+        _set_icon(dlg); dlg.title(title)
         dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
-        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,440,460)
+        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,440,540)
 
         btn_bar=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12)
         btn_bar.pack(fill='x',side='bottom')
@@ -211,7 +349,15 @@ class AdminModule:
         tk.Label(hdr,text=f"{'👤 Nuevo' if mode=='add' else '✏ Editar'} Usuario",
                  font=(FONT,13,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
 
-        body=tk.Frame(dlg,bg=THEME["ct_bg"],padx=24,pady=16); body.pack(fill='both',expand=True)
+        # Canvas con scroll para que siempre sea visible todo el contenido
+        canvas=tk.Canvas(dlg,bg=THEME["ct_bg"],highlightthickness=0)
+        canvas.pack(fill='both',expand=True)
+        body=tk.Frame(canvas,bg=THEME["ct_bg"],padx=24,pady=16)
+        canvas.create_window((0,0),window=body,anchor='nw',tags='body')
+        def _resize(e): canvas.itemconfig('body',width=e.width)
+        def _scrollrgn(e): canvas.configure(scrollregion=canvas.bbox('all'))
+        canvas.bind('<Configure>',_resize); body.bind('<Configure>',_scrollrgn)
+
         fields={}
         for key,lbl in [('nombre','Nombre completo'),('usuario','Nombre de usuario'),
                         ('password','Contraseña'),('password2','Confirmar contraseña')]:
@@ -221,7 +367,7 @@ class AdminModule:
             e.pack(fill='x',pady=(0,10)); fields[key]=e
 
         tk.Label(body,text="Rol",font=(FONT,9,'bold'),bg=THEME["ct_bg"],
-                 fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,3))
+                 fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,6))
         rol_var=tk.StringVar(value='Cajero')
         rol_f=tk.Frame(body,bg=THEME["ct_bg"]); rol_f.pack(fill='x',pady=(0,8))
         for rol in ['Administrador','Supervisor','Cajero']:
