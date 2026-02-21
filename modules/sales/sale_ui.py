@@ -396,8 +396,15 @@ class SalesModule:
                             'unit_price':i['unit_price'],'subtotal':i['subtotal']} for i in self.cart]
                     sid=self.db.create_sale(self.selected_customer_id,total,pay_var.get(),
                                             paid,paid-total,items,False)
-                    self._show_ticket(sid,total,pay_var.get(),paid,paid-total)
-                    messagebox.showinfo("✅ Venta registrada",f"Venta #{sid} completada")
+                    # Guardar copia del carrito y datos ANTES de vaciarlo
+                    _cart_copy = list(self.cart)
+                    _sid,_total,_method,_paid,_change = sid,total,pay_var.get(),paid,paid-total
+                    self.cart=[]; self._update_cart_display()
+                    dlg.grab_release(); dlg.destroy()
+                    # Mostrar ticket usando la copia del carrito
+                    self._show_ticket(_sid,_total,_method,_paid,_change,_cart_copy)
+                    messagebox.showinfo("✅ Venta registrada",f"Venta #{_sid} completada")
+                    return
                 else:
                     if not cust_var.get():
                         messagebox.showerror("Error","Seleccione un cliente",parent=dlg); return
@@ -415,23 +422,26 @@ class SalesModule:
                             'unit_price':i['unit_price'],'subtotal':i['subtotal']} for i in self.cart]
                     sid=self.db.create_sale(cid,total,"Crédito",down,0,items,True)
                     self.db.create_credit_sale(sid,cid,total,down,freq_var.get(),inst_amt,inst,first_date)
-                    messagebox.showinfo("✅ Crédito registrado",
-                        f"Total: {format_currency(total)}\nInicial: {format_currency(down)}\n"
-                        f"Saldo: {format_currency(rem)}\n{inst} cuotas de {format_currency(inst_amt)}")
-                self.cart=[]; self._update_cart_display(); dlg.destroy()
+                    _msg = (f"Total: {format_currency(total)}\nInicial: {format_currency(down)}\n"
+                            f"Saldo: {format_currency(rem)}\n{inst} cuotas de {format_currency(inst_amt)}")
+                    self.cart=[]; self._update_cart_display()
+                    dlg.grab_release(); dlg.destroy()
+                    messagebox.showinfo("✅ Crédito registrado", _msg)
+                    return
+                self.cart=[]; self._update_cart_display(); dlg.grab_release(); dlg.destroy()
             except Exception as e:
                 messagebox.showerror("Error",str(e),parent=dlg)
 
         _btn(btn_bar,"CONFIRMAR",finalize,THEME["acc_green"],"☑").pack(side='left',padx=(0,8))
         _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
 
-    def _show_ticket(self,sale_id,total,method,paid,change):
+    def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None):
         tw=tk.Toplevel(self.parent)
         _set_icon(tw)
         tw.title("Ticket #"+str(sale_id))
         tw.configure(bg='white')
         tw.transient(self.parent)
-        tw.grab_set()
+        # NO grab_set() — causaba congelamiento al combinarse con el grab del dlg
         tw.withdraw()  # ocultar mientras se construye
         tw.attributes('-topmost',True)
         tw.geometry("440x620")
@@ -500,7 +510,8 @@ class SalesModule:
         # Separadores por columna
         lines.append('-'*COL_PROD + '-'*COL_CANT + '-'*COL_PREC + '-'*COL_SUB)
 
-        for item in self.cart:
+        _items = cart_items if cart_items is not None else self.cart
+        for item in _items:
             lines.append(fmt_row(item['name'], item['quantity'],
                                  item['unit_price'], item['subtotal']))
             # Si el nombre es largo, segunda línea con continuación
@@ -561,6 +572,8 @@ class SalesModule:
                  THEME["acc_blue"],"🖨").pack(side='left',padx=(0,4))
 
         _btn(btn_row,"Cerrar",tw.destroy,THEME["btn_secondary"],"✕").pack(side='left',padx=4)
+        tw.deiconify()  # mostrar ahora que todo está construido
+        tw.lift()
 
     # ── Detección de impresoras ───────────────────────────────
 
