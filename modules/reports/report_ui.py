@@ -1,380 +1,233 @@
-"""
-Módulo de Reportes y Estadísticas
-Interfaz para visualizar ventas e indicadores
-"""
-
+"""Módulo Reportes — Diseño moderno Venialgo POS"""
 import tkinter as tk
 from tkinter import ttk, messagebox
-from config.settings import COLORS, FONTS, SPACING, BUTTON_STYLES
-from utils.formatters import format_currency, format_date
 from datetime import datetime, timedelta
+from utils.formatters import format_currency
+
+THEME={"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827",
+    "txt_primary":"#111827","txt_secondary":"#6B7280","txt_white":"#FFFFFF",
+    "acc_blue":"#2563EB","acc_green":"#059669","acc_amber":"#D97706","acc_rose":"#E11D48",
+    "acc_purple":"#7C3AED","acc_cyan":"#0891B2","btn_secondary":"#6B7280",
+    "input_bg":"#FFFFFF","input_brd":"#D1D5DB","input_foc":"#2563EB",
+    "row_odd":"#F9FAFB","row_even":"#FFFFFF"}
+FONT="Segoe UI"
+
+def _btn(parent,text,cmd,bg,icon="",**kw):
+    t=f"{icon}  {text}" if icon else text
+    def _dk(c):
+        r,g,b=int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
+        return f"#{max(0,int(r*.82)):02x}{max(0,int(g*.82)):02x}{max(0,int(b*.82)):02x}"
+    lbl=tk.Label(parent,text=t,font=(FONT,10,'bold'),bg=bg,fg="#fff",cursor='hand2',padx=14,pady=8,**kw)
+    lbl.bind('<Enter>',lambda _:lbl.config(bg=_dk(bg)))
+    lbl.bind('<Leave>',lambda _:lbl.config(bg=bg))
+    lbl.bind('<ButtonRelease-1>',lambda _:(lbl.config(bg=_dk(bg)),cmd()))
+    return lbl
+
+def _setup_styles():
+    s=ttk.Style()
+    try: s.theme_use('clam')
+    except: pass
+    s.configure("POS.Treeview",background="#fff",foreground="#111827",
+        fieldbackground="#fff",rowheight=34,font=(FONT,10),borderwidth=0)
+    s.configure("POS.Treeview.Heading",background="#111827",foreground="#fff",
+        font=(FONT,9,'bold'),relief='flat',padding=(8,6))
+    s.map("POS.Treeview",background=[('selected','#2563EB')],foreground=[('selected','#fff')])
+
+def _center(win,w,h):
+    win.update_idletasks(); sw,sh=win.winfo_screenwidth(),win.winfo_screenheight()
+    win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
 class ReportsModule:
-    def __init__(self, parent, db_manager):
-        self.parent = parent
-        self.db = db_manager
-        
-        self.create_ui()
-        self.load_today_sales()
-    
-    def create_ui(self):
-        """Crea la interfaz del módulo de reportes"""
-        
-        # ========== HEADER ==========
-        header_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        header_frame.pack(fill='x', padx=SPACING['lg'], pady=(SPACING['lg'], SPACING['md']))
-        
-        title = tk.Label(
-            header_frame,
-            text="📊 Reportes y Estadísticas",
-            font=(FONTS['family'], FONTS['title'], 'bold'),
-            bg=COLORS['bg_main'],
-            fg=COLORS['text_primary']
-        )
-        title.pack(side='left')
-        
-        # ========== FILTROS ==========
-        filters_frame = tk.Frame(self.parent, bg=COLORS['bg_card'])
-        filters_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        filter_inner = tk.Frame(filters_frame, bg=COLORS['bg_card'], padx=SPACING['md'], pady=SPACING['md'])
-        filter_inner.pack(fill='x')
-        
-        # Fecha desde
-        tk.Label(
-            filter_inner,
-            text="Desde:",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=0, column=0, padx=SPACING['sm'], pady=SPACING['sm'])
-        
-        self.date_from = tk.Entry(filter_inner, font=(FONTS['family'], FONTS['body']), width=12)
-        self.date_from.grid(row=0, column=1, padx=SPACING['sm'])
-        self.date_from.insert(0, datetime.now().strftime('%Y-%m-%d'))
-        
-        # Fecha hasta
-        tk.Label(
-            filter_inner,
-            text="Hasta:",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).grid(row=0, column=2, padx=SPACING['sm'], pady=SPACING['sm'])
-        
-        self.date_to = tk.Entry(filter_inner, font=(FONTS['family'], FONTS['body']), width=12)
-        self.date_to.grid(row=0, column=3, padx=SPACING['sm'])
-        self.date_to.insert(0, datetime.now().strftime('%Y-%m-%d'))
-        
-        # Botones rápidos
-        btn_today = tk.Button(
-            filter_inner,
-            text="Hoy",
-            command=self.load_today_sales,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_today.grid(row=0, column=4, padx=SPACING['sm'])
-        
-        btn_week = tk.Button(
-            filter_inner,
-            text="Esta Semana",
-            command=self.load_week_sales,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_week.grid(row=0, column=5, padx=SPACING['sm'])
-        
-        btn_month = tk.Button(
-            filter_inner,
-            text="Este Mes",
-            command=self.load_month_sales,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_month.grid(row=0, column=6, padx=SPACING['sm'])
-        
-        btn_search = tk.Button(
-            filter_inner,
-            text="🔍 Buscar",
-            command=self.load_sales_by_date,
-            **BUTTON_STYLES['primary']
-        )
-        btn_search.grid(row=0, column=7, padx=SPACING['sm'])
-        
-        # ========== ESTADÍSTICAS ==========
-        stats_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        stats_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        # Card de Total Ventas
-        self.card_total = self.create_stat_card(
-            stats_frame, 
-            "Total Vendido", 
-            "$0.00",
-            COLORS['success']
-        )
-        self.card_total.pack(side='left', padx=SPACING['sm'], fill='both', expand=True)
-        
-        # Card de Cantidad de Ventas
-        self.card_count = self.create_stat_card(
-            stats_frame,
-            "Cantidad de Ventas",
-            "0",
-            COLORS['primary']
-        )
-        self.card_count.pack(side='left', padx=SPACING['sm'], fill='both', expand=True)
-        
-        # Card de Promedio
-        self.card_avg = self.create_stat_card(
-            stats_frame,
-            "Promedio por Venta",
-            "$0.00",
-            COLORS['info']
-        )
-        self.card_avg.pack(side='left', padx=SPACING['sm'], fill='both', expand=True)
-        
-        # ========== TABLA DE VENTAS ==========
-        table_frame = tk.Frame(self.parent, bg=COLORS['bg_card'])
-        table_frame.pack(fill='both', expand=True, padx=SPACING['lg'], pady=SPACING['md'])
-        
-        scrollbar = ttk.Scrollbar(table_frame)
-        scrollbar.pack(side='right', fill='y')
-        
-        columns = ('ID', 'Fecha', 'Cliente', 'Total', 'Método Pago')
-        self.sales_tree = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show='headings',
-            yscrollcommand=scrollbar.set,
-            selectmode='browse'
-        )
-        
-        self.sales_tree.heading('ID', text='ID')
-        self.sales_tree.heading('Fecha', text='Fecha')
-        self.sales_tree.heading('Cliente', text='Cliente')
-        self.sales_tree.heading('Total', text='Total')
-        self.sales_tree.heading('Método Pago', text='Método de Pago')
-        
-        self.sales_tree.column('ID', width=60, anchor='center')
-        self.sales_tree.column('Fecha', width=150, anchor='w')
-        self.sales_tree.column('Cliente', width=200, anchor='w')
-        self.sales_tree.column('Total', width=120, anchor='e')
-        self.sales_tree.column('Método Pago', width=150, anchor='w')
-        
-        self.sales_tree.pack(fill='both', expand=True)
-        scrollbar.config(command=self.sales_tree.yview)
-        
-        # Bind doble click para ver detalles
-        self.sales_tree.bind('<Double-Button-1>', lambda e: self.show_sale_details())
-        
-        # ========== BOTONES DE ACCIÓN ==========
-        actions_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        actions_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        btn_details = tk.Button(
-            actions_frame,
-            text="👁️ Ver Detalles",
-            command=self.show_sale_details,
-            **BUTTON_STYLES['primary']
-        )
-        btn_details.pack(side='left', padx=SPACING['sm'])
-    
-    def create_stat_card(self, parent, title, value, color):
-        """Crea una tarjeta de estadística"""
-        card = tk.Frame(parent, bg=COLORS['bg_card'], relief='solid', borderwidth=1)
-        
-        title_label = tk.Label(
-            card,
-            text=title,
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_secondary']
-        )
-        title_label.pack(pady=(SPACING['md'], SPACING['sm']))
-        
-        value_label = tk.Label(
-            card,
-            text=value,
-            font=(FONTS['family'], FONTS['title'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=color
-        )
-        value_label.pack(pady=(0, SPACING['md']))
-        
-        # Guardar referencia al label de valor
-        card.value_label = value_label
-        
-        return card
-    
-    def load_today_sales(self):
-        """Carga ventas del día actual"""
-        today = datetime.now().strftime('%Y-%m-%d')
-        self.date_from.delete(0, tk.END)
-        self.date_from.insert(0, today)
-        self.date_to.delete(0, tk.END)
-        self.date_to.insert(0, today)
-        self.load_sales_by_date()
-    
-    def load_week_sales(self):
-        """Carga ventas de la última semana"""
-        today = datetime.now()
-        week_ago = today - timedelta(days=7)
-        
-        self.date_from.delete(0, tk.END)
-        self.date_from.insert(0, week_ago.strftime('%Y-%m-%d'))
-        self.date_to.delete(0, tk.END)
-        self.date_to.insert(0, today.strftime('%Y-%m-%d'))
-        self.load_sales_by_date()
-    
-    def load_month_sales(self):
-        """Carga ventas del mes actual"""
-        today = datetime.now()
-        first_day = today.replace(day=1)
-        
-        self.date_from.delete(0, tk.END)
-        self.date_from.insert(0, first_day.strftime('%Y-%m-%d'))
-        self.date_to.delete(0, tk.END)
-        self.date_to.insert(0, today.strftime('%Y-%m-%d'))
-        self.load_sales_by_date()
-    
-    def load_sales_by_date(self):
-        """Carga ventas según rango de fechas"""
+    def __init__(self,parent,db_manager):
+        self.parent=parent; self.db=db_manager
+        self.sales_data=[]; _setup_styles()
+        self._build()
+        self._quick_filter('today')
+
+    def _stat_card(self,parent,title,value,accent,icon=""):
+        outer=tk.Frame(parent,bg=THEME["card_border"])
+        inner=tk.Frame(outer,bg=THEME["card_bg"],padx=16,pady=14)
+        inner.pack(fill='both',expand=True,padx=1,pady=1)
+        tk.Label(inner,text=f"{icon}  {title}" if icon else title,
+                 font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
+        lbl=tk.Label(inner,text=value,font=(FONT,18,'bold'),bg=THEME["card_bg"],fg=accent)
+        lbl.pack(anchor='w',pady=(4,0))
+        tk.Frame(inner,bg=accent,height=3).pack(fill='x',pady=(10,0))
+        inner.value_label=lbl; outer.value_label=lbl
+        return outer
+
+    def _build(self):
+        bg=THEME["ct_bg"]
+        # Header
+        hdr=tk.Frame(self.parent,bg=bg); hdr.pack(fill='x',padx=28,pady=(20,0))
+        tk.Label(hdr,text="📊  Reportes y Estadísticas",font=(FONT,16,'bold'),
+                 bg=bg,fg=THEME["txt_primary"]).pack(side='left')
+        tk.Frame(self.parent,bg=THEME["card_border"],height=1).pack(fill='x',padx=28,pady=(10,14))
+
+        # Filtros rápidos
+        flt_card_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+        flt_card_outer.pack(fill='x',padx=24,pady=(0,14))
+        flt_card=tk.Frame(flt_card_outer,bg=THEME["card_bg"],padx=16,pady=12)
+        flt_card.pack(fill='x',padx=1,pady=1)
+        tk.Label(flt_card,text="Período:",font=(FONT,10,'bold'),
+                 bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(side='left',padx=(0,12))
+        for val,lbl in [('today','Hoy'),('week','Esta semana'),('month','Este mes'),('year','Este año')]:
+            b=tk.Label(flt_card,text=lbl,font=(FONT,9,'bold'),cursor='hand2',
+                       padx=12,pady=6,bg=THEME["input_brd"],fg=THEME["txt_secondary"])
+            b.pack(side='left',padx=2)
+            b.bind('<Enter>',lambda e,w=b:w.config(bg=THEME["acc_blue"],fg="#fff"))
+            b.bind('<Leave>',lambda e,w=b:w.config(bg=THEME["input_brd"],fg=THEME["txt_secondary"]))
+            b.bind('<Button-1>',lambda e,v=val:self._quick_filter(v))
+
+        # Rango personalizado
+        tk.Frame(flt_card,bg=THEME["card_border"],width=1).pack(side='left',fill='y',padx=12,pady=2)
+        tk.Label(flt_card,text="Desde:",font=(FONT,9,'bold'),bg=THEME["card_bg"],
+                 fg=THEME["txt_secondary"]).pack(side='left',padx=(0,6))
+        self.date_from=tk.Entry(flt_card,font=(FONT,10),width=11,
+                                bg=THEME["input_bg"],fg=THEME["txt_primary"],
+                                relief='solid',bd=1,insertbackground=THEME["acc_blue"])
+        self.date_from.pack(side='left',padx=(0,8))
+        tk.Label(flt_card,text="Hasta:",font=(FONT,9,'bold'),bg=THEME["card_bg"],
+                 fg=THEME["txt_secondary"]).pack(side='left',padx=(0,6))
+        self.date_to=tk.Entry(flt_card,font=(FONT,10),width=11,
+                              bg=THEME["input_bg"],fg=THEME["txt_primary"],
+                              relief='solid',bd=1,insertbackground=THEME["acc_blue"])
+        self.date_to.pack(side='left',padx=(0,10))
+        _btn(flt_card,"Buscar",self.load_report,THEME["acc_blue"],"🔍").pack(side='left')
+
+        # Cards KPI
+        kpi_row=tk.Frame(self.parent,bg=bg); kpi_row.pack(fill='x',padx=24,pady=(0,14))
+        self.kpi_count  =self._stat_card(kpi_row,"Total Ventas","0",THEME["acc_blue"],"🛒")
+        self.kpi_revenue=self._stat_card(kpi_row,"Ingresos Totales","Gs. 0",THEME["acc_green"],"💰")
+        self.kpi_avg    =self._stat_card(kpi_row,"Ticket Promedio","Gs. 0",THEME["acc_amber"],"📈")
+        self.kpi_items  =self._stat_card(kpi_row,"Productos Vendidos","0",THEME["acc_purple"],"📦")
+        for i,w in enumerate([self.kpi_count,self.kpi_revenue,self.kpi_avg,self.kpi_items]):
+            w.grid(row=0,column=i,sticky='nsew',padx=4); kpi_row.columnconfigure(i,weight=1)
+
+        # Tabla ventas
+        tbl_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+        tbl_outer.pack(fill='both',expand=True,padx=24,pady=(0,10))
+        tbl=tk.Frame(tbl_outer,bg=THEME["card_bg"]); tbl.pack(fill='both',expand=True,padx=1,pady=1)
+
+        tbl_hdr=tk.Frame(tbl,bg=THEME["card_bg"],padx=16,pady=10); tbl_hdr.pack(fill='x')
+        tk.Label(tbl_hdr,text="Detalle de Ventas",font=(FONT,11,'bold'),
+                 bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(side='left')
+        self.lbl_count=tk.Label(tbl_hdr,text="",font=(FONT,9),
+                                bg=THEME["card_bg"],fg=THEME["txt_secondary"]); self.lbl_count.pack(side='left',padx=8)
+        _btn(tbl_hdr,"Exportar CSV",self.export_csv,THEME["acc_cyan"],"📥").pack(side='right')
+        tk.Frame(tbl,bg=THEME["card_border"],height=1).pack(fill='x')
+
+        cols=('ID','Fecha','Cliente','Total','Método','Estado')
+        self.tree=ttk.Treeview(tbl,columns=cols,show='headings',style='POS.Treeview')
+        widths={'ID':55,'Fecha':155,'Cliente':200,'Total':120,'Método':120,'Estado':80}
+        for col in cols:
+            self.tree.heading(col,text=col)
+            self.tree.column(col,width=widths[col],anchor='w' if col in('Fecha','Cliente') else 'center')
+        sb=ttk.Scrollbar(tbl,orient='vertical',command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        sb.pack(side='right',fill='y',padx=(0,4),pady=4); self.tree.pack(fill='both',expand=True,padx=4,pady=4)
+        self.tree.bind('<Double-Button-1>',self._show_sale_detail)
+        self.tree.tag_configure('odd',background=THEME["row_odd"])
+        self.tree.tag_configure('even',background=THEME["row_even"])
+        self.tree.tag_configure('credit',foreground=THEME["acc_purple"])
+
+    def _quick_filter(self,period):
+        today=datetime.now()
+        if period=='today':
+            d_from=d_to=today.strftime('%Y-%m-%d')
+        elif period=='week':
+            d_from=(today-timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+            d_to=today.strftime('%Y-%m-%d')
+        elif period=='month':
+            d_from=today.strftime('%Y-%m-01')
+            d_to=today.strftime('%Y-%m-%d')
+        else:
+            d_from=today.strftime('%Y-01-01')
+            d_to=today.strftime('%Y-%m-%d')
+        self.date_from.delete(0,'end'); self.date_from.insert(0,d_from)
+        self.date_to.delete(0,'end'); self.date_to.insert(0,d_to)
+        self.load_report()
+
+    def load_report(self):
+        d_from=self.date_from.get().strip(); d_to=self.date_to.get().strip()
+        if not d_from or not d_to: return
         try:
-            start_date = self.date_from.get()
-            end_date = self.date_to.get()
-            
-            # Validar formato de fechas
-            datetime.strptime(start_date, '%Y-%m-%d')
-            datetime.strptime(end_date, '%Y-%m-%d')
-            
-            # Obtener ventas
-            sales = self.db.get_sales_by_date(start_date, end_date)
-            
-            # Limpiar tabla
-            for item in self.sales_tree.get_children():
-                self.sales_tree.delete(item)
-            
-            # Insertar ventas
-            for sale in sales:
-                customer_name = sale['customer_name'] if sale['customer_name'] else 'Cliente General'
-                self.sales_tree.insert('', 'end', values=(
-                    sale['id'],
-                    format_date(sale['sale_date']),
-                    customer_name,
-                    format_currency(sale['total']),
-                    sale['payment_method']
-                ))
-            
-            # Actualizar estadísticas
-            summary = self.db.get_sales_summary(start_date, end_date)
-            if summary:
-                total_sales = summary['total_sales'] or 0
-                total_revenue = summary['total_revenue'] or 0
-                avg_sale = summary['average_sale'] or 0
-                
-                self.card_total.value_label.config(text=format_currency(total_revenue))
-                self.card_count.value_label.config(text=str(total_sales))
-                self.card_avg.value_label.config(text=format_currency(avg_sale))
-            
-        except ValueError:
-            messagebox.showerror("Error", "Formato de fecha inválido. Use YYYY-MM-DD")
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar ventas: {str(e)}")
-    
-    def show_sale_details(self):
-        """Muestra los detalles de una venta seleccionada"""
-        selection = self.sales_tree.selection()
-        if not selection:
-            messagebox.showwarning("Advertencia", "Seleccione una venta")
-            return
-        
-        item = self.sales_tree.item(selection[0])
-        sale_id = item['values'][0]
-        
-        # Obtener detalles de la venta
-        details = self.db.get_sale_details(sale_id)
-        
-        if not details:
-            messagebox.showinfo("Info", "No se encontraron detalles")
-            return
-        
-        # Crear ventana de detalles
-        details_window = tk.Toplevel(self.parent)
-        details_window.title(f"Detalles de Venta #{sale_id}")
-        details_window.geometry("600x400")
-        details_window.update_idletasks()
-        _sw = details_window.winfo_screenwidth()
-        _sh = details_window.winfo_screenheight()
-        details_window.geometry(f"600x400+{(_sw-600)//2}+{(_sh-400)//2}")
-        details_window.configure(bg=COLORS['bg_card'])
-        details_window.transient(self.parent)
-        
-        # Título
-        tk.Label(
-            details_window,
-            text=f"Productos de la Venta #{sale_id}",
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(pady=SPACING['lg'])
-        
-        # Tabla de detalles
-        table_frame = tk.Frame(details_window, bg=COLORS['bg_card'])
-        table_frame.pack(fill='both', expand=True, padx=SPACING['lg'], pady=SPACING['md'])
-        
-        columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
-        tree = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show='headings',
-            selectmode='browse'
-        )
-        
-        tree.heading('Producto', text='Producto')
-        tree.heading('Cantidad', text='Cantidad')
-        tree.heading('Precio Unit.', text='Precio Unitario')
-        tree.heading('Subtotal', text='Subtotal')
-        
-        tree.column('Producto', width=250, anchor='w')
-        tree.column('Cantidad', width=100, anchor='center')
-        tree.column('Precio Unit.', width=120, anchor='e')
-        tree.column('Subtotal', width=120, anchor='e')
-        
-        tree.pack(fill='both', expand=True)
-        
-        # Insertar detalles
-        total = 0
-        for detail in details:
-            tree.insert('', 'end', values=(
-                detail['product_name'],
-                detail['quantity'],
-                format_currency(detail['unit_price']),
-                format_currency(detail['subtotal'])
-            ))
-            total += detail['subtotal']
-        
-        # Total
-        total_frame = tk.Frame(details_window, bg=COLORS['bg_card'])
-        total_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        tk.Label(
-            total_frame,
-            text="TOTAL:",
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(side='left')
-        
-        tk.Label(
-            total_frame,
-            text=format_currency(total),
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['success']
-        ).pack(side='right')
-        
-        # Botón cerrar
-        btn_close = tk.Button(
-            details_window,
-            text="Cerrar",
-            command=details_window.destroy,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_close.pack(pady=SPACING['md'])
+            datetime.strptime(d_from,'%Y-%m-%d'); datetime.strptime(d_to,'%Y-%m-%d')
+        except ValueError: messagebox.showerror("Error","Use formato YYYY-MM-DD"); return
+
+        for i in self.tree.get_children(): self.tree.delete(i)
+        self.sales_data=self.db.get_sales_by_date(d_from,d_to)
+        summary=self.db.get_sales_summary(d_from,d_to)
+
+        self.kpi_count.value_label.config(text=str(summary.get('total_sales',0)))
+        self.kpi_revenue.value_label.config(text=format_currency(summary.get('total_revenue',0)))
+        self.kpi_avg.value_label.config(text=format_currency(summary.get('average_sale',0)))
+
+        # Productos vendidos
+        try:
+            items=self.db.execute_scalar(
+                """SELECT COALESCE(SUM(d.cantidad),0) FROM detalle_ventas d
+                   JOIN ventas v ON d.venta_id=v.id
+                   WHERE v.fecha BETWEEN ? AND ?""",(d_from,d_to+' 23:59:59')) or 0
+            self.kpi_items.value_label.config(text=str(int(items)))
+        except: pass
+
+        for idx,s in enumerate(self.sales_data):
+            tag_row='odd' if idx%2 else 'even'
+            tags=(tag_row,'credit') if s.get('payment_method','')=='Crédito' else (tag_row,)
+            self.tree.insert('','end',tags=tags,values=(
+                s.get('id',''),
+                s.get('sale_date','')[:16] if s.get('sale_date') else '',
+                s.get('customer_name','') or 'Consumidor Final',
+                format_currency(s.get('total',0)),
+                s.get('payment_method',''),
+                'Crédito' if s.get('payment_method')=='Crédito' else 'Contado'))
+        self.lbl_count.config(text=f"({len(self.sales_data)} registros)")
+
+    def _show_sale_detail(self,_=None):
+        sel=self.tree.selection()
+        if not sel: return
+        sale_id=self.tree.item(sel[0])['values'][0]
+        details=self.db.get_sale_details(sale_id)
+        if not details: return
+        sale=next((s for s in self.sales_data if s.get('id')==sale_id),{})
+        dlg=tk.Toplevel(self.parent); dlg.title(f"Venta #{sale_id}")
+        dlg.configure(bg=THEME["ct_bg"]); dlg.transient(self.parent); _center(dlg,580,460)
+        hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12); hdr.pack(fill='x')
+        tk.Label(hdr,text=f"🧾  Venta #{sale_id} — {sale.get('customer_name','') or 'Consumidor Final'}",
+                 font=(FONT,12,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
+        tk.Label(hdr,text=f"Total: {format_currency(sale.get('total',0))}  ·  {sale.get('sale_date','')[:16]}",
+                 font=(FONT,9),bg=THEME["sb_bg"],fg="#94A3B8").pack(anchor='w',padx=16)
+        tbl=tk.Frame(dlg,bg=THEME["card_bg"]); tbl.pack(fill='both',expand=True,padx=16,pady=16)
+        cols2=('Producto','Cantidad','Precio Unit.','Subtotal')
+        tree2=ttk.Treeview(tbl,columns=cols2,show='headings',height=10,style='POS.Treeview')
+        for col,w in zip(cols2,[240,80,120,120]):
+            tree2.heading(col,text=col); tree2.column(col,width=w,anchor='w' if col=='Producto' else 'center')
+        sb2=ttk.Scrollbar(tbl,orient='vertical',command=tree2.yview)
+        tree2.configure(yscrollcommand=sb2.set)
+        sb2.pack(side='right',fill='y'); tree2.pack(fill='both',expand=True)
+        for i,d in enumerate(details):
+            tree2.insert('','end',tags=('odd' if i%2 else 'even',),values=(
+                d.get('product_name',''),d.get('quantity',0),
+                format_currency(d.get('unit_price',0)),
+                format_currency(d.get('quantity',0)*d.get('unit_price',0))))
+        tree2.tag_configure('odd',background=THEME["row_odd"]); tree2.tag_configure('even',background=THEME["row_even"])
+        _btn(dlg,"Cerrar",dlg.destroy,THEME["btn_secondary"]).pack(pady=10)
+
+    def export_csv(self):
+        if not self.sales_data: messagebox.showinfo("Info","Sin datos para exportar"); return
+        from tkinter import filedialog
+        import csv
+        path=filedialog.asksaveasfilename(defaultextension='.csv',
+            filetypes=[('CSV','*.csv')],title="Guardar reporte")
+        if not path: return
+        try:
+            with open(path,'w',newline='',encoding='utf-8-sig') as f:
+                w=csv.writer(f)
+                w.writerow(['ID','Fecha','Cliente','Total','Método'])
+                for s in self.sales_data:
+                    w.writerow([s.get('id',''),s.get('sale_date',''),
+                        s.get('customer_name','') or 'Consumidor Final',
+                        s.get('total',0),s.get('payment_method','')])
+            messagebox.showinfo("✅ Exportado",f"Archivo guardado:\n{path}")
+        except Exception as e: messagebox.showerror("Error",str(e))

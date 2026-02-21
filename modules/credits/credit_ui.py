@@ -1,608 +1,318 @@
-"""
-Módulo de Gestión de Créditos y Pagos
-Interfaz para administrar ventas a crédito y registrar abonos
-"""
-
+"""Módulo Gestión de Créditos — Diseño moderno Venialgo POS"""
 import tkinter as tk
 from tkinter import ttk, messagebox
-from config.settings import COLORS, FONTS, SPACING, BUTTON_STYLES, CREDIT
-from utils.formatters import format_currency, format_date
 from datetime import datetime, timedelta
+from config.settings import COLORS, FONTS as _F, SPACING, BUTTON_STYLES, CREDIT
+from utils.formatters import format_currency, format_date
+
+THEME = {"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827",
+    "txt_primary":"#111827","txt_secondary":"#6B7280","txt_white":"#FFFFFF",
+    "acc_blue":"#2563EB","acc_green":"#059669","acc_amber":"#D97706","acc_rose":"#E11D48",
+    "acc_purple":"#7C3AED","btn_danger":"#DC2626","btn_secondary":"#6B7280",
+    "input_bg":"#FFFFFF","input_brd":"#D1D5DB","input_foc":"#2563EB",
+    "row_odd":"#F9FAFB","row_even":"#FFFFFF"}
+FONT="Segoe UI"
+
+def _btn(parent,text,cmd,bg,icon="",**kw):
+    t=f"{icon}  {text}" if icon else text
+    def _dk(c):
+        r,g,b=int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
+        return f"#{max(0,int(r*.82)):02x}{max(0,int(g*.82)):02x}{max(0,int(b*.82)):02x}"
+    _en=[True]
+    lbl=tk.Label(parent,text=t,font=(FONT,10,'bold'),bg=bg,fg="#fff",
+                 cursor='hand2',padx=14,pady=8,**kw)
+    def _click(_=None):
+        if _en[0]: lbl.config(bg=_dk(bg)); lbl.after(120,lambda:lbl.config(bg=bg)); cmd()
+    lbl.bind('<Enter>',lambda _:(lbl.config(bg=_dk(bg)) if _en[0] else None))
+    lbl.bind('<Leave>',lambda _:lbl.config(bg=bg if _en[0] else "#9CA3AF"))
+    lbl.bind('<ButtonRelease-1>',_click)
+    lbl.enable =lambda:(setattr(type(lbl),'_e',True) or _en.__setitem__(0,True)  or lbl.config(bg=bg,    fg="#fff",cursor='hand2'))
+    lbl.disable=lambda:(setattr(type(lbl),'_e',False)or _en.__setitem__(0,False) or lbl.config(bg="#9CA3AF",fg="#fff",cursor='arrow'))
+    return lbl
+
+def _setup_styles():
+    s=ttk.Style()
+    try: s.theme_use('clam')
+    except: pass
+    s.configure("POS.Treeview",background="#fff",foreground="#111827",
+        fieldbackground="#fff",rowheight=34,font=(FONT,10),borderwidth=0)
+    s.configure("POS.Treeview.Heading",background="#111827",foreground="#fff",
+        font=(FONT,9,'bold'),relief='flat',padding=(8,6))
+    s.map("POS.Treeview",background=[('selected','#2563EB')],foreground=[('selected','#fff')])
+
+def _center(win,w,h):
+    win.update_idletasks()
+    sw,sh=win.winfo_screenwidth(),win.winfo_screenheight()
+    win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
 class CreditsModule:
-    def __init__(self, parent, db_manager):
-        self.parent = parent
-        self.db = db_manager
-        self.selected_credit_id = None
-        
-        self.create_ui()
-        self.load_credits()
-    
-    def create_ui(self):
-        """Crea la interfaz del módulo de créditos"""
-        
-        # ========== HEADER ==========
-        header_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        header_frame.pack(fill='x', padx=SPACING['lg'], pady=(SPACING['lg'], SPACING['md']))
-        
-        title = tk.Label(
-            header_frame,
-            text="💳 Gestión de Créditos",
-            font=(FONTS['family'], FONTS['title'], 'bold'),
-            bg=COLORS['bg_main'],
-            fg=COLORS['text_primary']
-        )
-        title.pack(side='left')
-        
-        # ========== FILTROS ==========
-        filters_frame = tk.Frame(self.parent, bg=COLORS['bg_card'])
-        filters_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        filter_inner = tk.Frame(filters_frame, bg=COLORS['bg_card'], padx=SPACING['md'], pady=SPACING['md'])
-        filter_inner.pack(fill='x')
-        
-        tk.Label(
-            filter_inner,
-            text="Filtrar por estado:",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(side='left', padx=SPACING['sm'])
-        
-        self.status_var = tk.StringVar(value='all')
-        
-        status_options = [
-            ('Todos', 'all'),
-            ('Activos', 'active'),
-            ('Pagados', 'paid'),
-            ('Vencidos', 'overdue')
-        ]
-        
-        for text, value in status_options:
-            rb = tk.Radiobutton(
-                filter_inner,
-                text=text,
-                variable=self.status_var,
-                value=value,
-                font=(FONTS['family'], FONTS['body']),
-                bg=COLORS['bg_card'],
-                fg=COLORS['text_primary'],
-                selectcolor=COLORS['bg_card'],
-                command=self.load_credits
-            )
-            rb.pack(side='left', padx=SPACING['sm'])
-        
-        # ========== ESTADÍSTICAS ==========
-        stats_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        stats_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        self.card_active = self.create_stat_card(stats_frame, "Créditos Activos", "0", COLORS['info'])
-        self.card_active.pack(side='left', padx=SPACING['sm'], fill='both', expand=True)
-        
-        self.card_pending = self.create_stat_card(stats_frame, "Total por Cobrar", "₲0", COLORS['warning'])
-        self.card_pending.pack(side='left', padx=SPACING['sm'], fill='both', expand=True)
-        
-        self.card_overdue = self.create_stat_card(stats_frame, "Vencidos", "0", COLORS['danger'])
-        self.card_overdue.pack(side='left', padx=SPACING['sm'], fill='both', expand=True)
-        
-        # ========== TABLA DE CRÉDITOS ==========
-        table_frame = tk.Frame(self.parent, bg=COLORS['bg_card'])
-        table_frame.pack(fill='both', expand=True, padx=SPACING['lg'], pady=SPACING['md'])
-        
-        scrollbar = ttk.Scrollbar(table_frame)
-        scrollbar.pack(side='right', fill='y')
-        
-        columns = ('ID', 'Cliente', 'Total', 'Cuota Inicial', 'Saldo', 'Cuota', 'Pagadas', 'Total Cuotas', 'Próximo Pago', 'Estado')
-        self.tree = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show='headings',
-            yscrollcommand=scrollbar.set,
-            selectmode='browse'
-        )
-        
-        # Configurar columnas
-        self.tree.heading('ID', text='ID')
-        self.tree.heading('Cliente', text='Cliente')
-        self.tree.heading('Total', text='Total')
-        self.tree.heading('Cuota Inicial', text='Inicial')
-        self.tree.heading('Saldo', text='Saldo')
-        self.tree.heading('Cuota', text='Cuota')
-        self.tree.heading('Pagadas', text='Pagadas')
-        self.tree.heading('Total Cuotas', text='Total')
-        self.tree.heading('Próximo Pago', text='Próximo Pago')
-        self.tree.heading('Estado', text='Estado')
-        
-        self.tree.column('ID', width=50, anchor='center')
-        self.tree.column('Cliente', width=150, anchor='w')
-        self.tree.column('Total', width=100, anchor='e')
-        self.tree.column('Cuota Inicial', width=100, anchor='e')
-        self.tree.column('Saldo', width=100, anchor='e')
-        self.tree.column('Cuota', width=100, anchor='e')
-        self.tree.column('Pagadas', width=70, anchor='center')
-        self.tree.column('Total Cuotas', width=70, anchor='center')
-        self.tree.column('Próximo Pago', width=100, anchor='center')
-        self.tree.column('Estado', width=80, anchor='center')
-        
-        self.tree.pack(fill='both', expand=True)
-        scrollbar.config(command=self.tree.yview)
-        
-        # Evento de selección
-        self.tree.bind('<<TreeviewSelect>>', self.on_credit_select)
-        self.tree.bind('<Double-Button-1>', lambda e: self.show_credit_details())
-        
-        # ========== BOTONES DE ACCIÓN ==========
-        actions_frame = tk.Frame(self.parent, bg=COLORS['bg_main'])
-        actions_frame.pack(fill='x', padx=SPACING['lg'], pady=SPACING['md'])
-        
-        self.btn_pay = tk.Button(
-            actions_frame,
-            text="💰 Registrar Pago",
-            command=self.show_payment_dialog,
-            state='disabled',
-            **BUTTON_STYLES['success']
-        )
-        self.btn_pay.pack(side='left', padx=SPACING['sm'])
-        
-        self.btn_history = tk.Button(
-            actions_frame,
-            text="📋 Ver Historial",
-            command=self.show_payment_history,
-            state='disabled',
-            **BUTTON_STYLES['primary']
-        )
-        self.btn_history.pack(side='left', padx=SPACING['sm'])
-        
-        self.btn_change_date = tk.Button(
-            actions_frame,
-            text="📅 Cambiar Fecha",
-            command=self.show_change_date_dialog,
-            state='disabled',
-            **BUTTON_STYLES['secondary']
-        )
-        self.btn_change_date.pack(side='left', padx=SPACING['sm'])
-    
-    def create_stat_card(self, parent, title, value, color):
-        """Crea una tarjeta de estadística"""
-        card = tk.Frame(parent, bg=COLORS['bg_card'], relief='solid', borderwidth=1)
-        
-        title_label = tk.Label(
-            card,
-            text=title,
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_secondary']
-        )
-        title_label.pack(pady=(SPACING['md'], SPACING['sm']))
-        
-        value_label = tk.Label(
-            card,
-            text=value,
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=color
-        )
-        value_label.pack(pady=(0, SPACING['md']))
-        
-        card.value_label = value_label
-        return card
-    
+    def __init__(self,parent,db_manager):
+        self.parent=parent; self.db=db_manager
+        self.selected_credit_id=None
+        _setup_styles()
+        self._build(); self.load_credits()
+
+    def _stat_card(self,parent,title,value,accent):
+        outer=tk.Frame(parent,bg=THEME["card_border"])
+        inner=tk.Frame(outer,bg=THEME["card_bg"],padx=16,pady=14)
+        inner.pack(fill='both',expand=True,padx=1,pady=1)
+        tk.Label(inner,text=title,font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
+        lbl=tk.Label(inner,text=value,font=(FONT,18,'bold'),bg=THEME["card_bg"],fg=accent)
+        lbl.pack(anchor='w',pady=(4,0))
+        tk.Frame(inner,bg=accent,height=3).pack(fill='x',pady=(10,0))
+        inner.value_label=lbl
+        outer.value_label=lbl
+        return outer
+
+    def _build(self):
+        bg=THEME["ct_bg"]
+        # Header
+        hdr=tk.Frame(self.parent,bg=bg)
+        hdr.pack(fill='x',padx=28,pady=(20,0))
+        tk.Label(hdr,text="💳  Gestión de Créditos",font=(FONT,16,'bold'),
+                 bg=bg,fg=THEME["txt_primary"]).pack(side='left')
+        tk.Frame(self.parent,bg=THEME["card_border"],height=1).pack(fill='x',padx=28,pady=(10,14))
+
+        # Filtros
+        flt=tk.Frame(self.parent,bg=bg,padx=28)
+        flt.pack(fill='x',pady=(0,12))
+        tk.Label(flt,text="Filtrar:",font=(FONT,10,'bold'),bg=bg,fg=THEME["txt_secondary"]).pack(side='left',padx=(0,10))
+        self.status_var=tk.StringVar(value='all')
+        for val,lbl in [('all','Todos'),('active','Activos'),('paid','Pagados'),('overdue','Vencidos')]:
+            rb=tk.Radiobutton(flt,text=lbl,variable=self.status_var,value=val,
+               font=(FONT,10),bg=bg,fg=THEME["txt_primary"],selectcolor=bg,
+               command=self.load_credits)
+            rb.pack(side='left',padx=(0,16))
+
+        # Cards estadísticas
+        stats_row=tk.Frame(self.parent,bg=bg)
+        stats_row.pack(fill='x',padx=24,pady=(0,14))
+        self.card_active  =self._stat_card(stats_row,"Créditos Activos","0",THEME["acc_blue"])
+        self.card_active.grid(row=0,column=0,sticky='nsew',padx=4)
+        self.card_pending =self._stat_card(stats_row,"Total por Cobrar","Gs. 0",THEME["acc_amber"])
+        self.card_pending.grid(row=0,column=1,sticky='nsew',padx=4)
+        self.card_overdue =self._stat_card(stats_row,"Vencidos","0",THEME["acc_rose"])
+        self.card_overdue.grid(row=0,column=2,sticky='nsew',padx=4)
+        for i in range(3): stats_row.columnconfigure(i,weight=1)
+
+        # Tabla
+        tbl_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+        tbl_outer.pack(fill='both',expand=True,padx=24,pady=(0,10))
+        tbl=tk.Frame(tbl_outer,bg=THEME["card_bg"])
+        tbl.pack(fill='both',expand=True,padx=1,pady=1)
+
+        cols=('ID','Cliente','Total','Inicial','Saldo','Cuota','Pagadas','Cuotas','Próximo','Estado')
+        self.tree=ttk.Treeview(tbl,columns=cols,show='headings',style='POS.Treeview')
+        for col,w in zip(cols,[45,150,100,90,90,90,60,60,100,80]):
+            self.tree.heading(col,text=col)
+            self.tree.column(col,width=w,anchor='center' if col not in('Cliente',) else 'w')
+        sb=ttk.Scrollbar(tbl,orient='vertical',command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        sb.pack(side='right',fill='y',padx=(0,4),pady=4)
+        self.tree.pack(fill='both',expand=True,padx=4,pady=4)
+        self.tree.bind('<<TreeviewSelect>>',self._on_select)
+        self.tree.bind('<Double-Button-1>',lambda _:self.show_credit_details())
+        self.tree.tag_configure('active',background=THEME["row_even"])
+        self.tree.tag_configure('paid',background='#F0FDF4')
+        self.tree.tag_configure('overdue',background='#FFF1F2')
+
+        # Botones acción
+        act=tk.Frame(self.parent,bg=bg,padx=24,pady=10)
+        act.pack(fill='x')
+        self.btn_pay=_btn(act,"Registrar Pago",self.show_payment_dialog,THEME["acc_green"],"💰")
+        self.btn_pay.disable(); self.btn_pay.pack(side='left',padx=(0,8))
+        self.btn_hist=_btn(act,"Ver Historial",self.show_payment_history,THEME["acc_blue"],"📋")
+        self.btn_hist.disable(); self.btn_hist.pack(side='left',padx=(0,8))
+        self.btn_date=_btn(act,"Cambiar Fecha",self.show_change_date_dialog,THEME["btn_secondary"],"📅")
+        self.btn_date.disable(); self.btn_date.pack(side='left')
+
     def load_credits(self):
-        """Carga los créditos según el filtro seleccionado"""
-        # Limpiar tabla
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        
-        # Obtener créditos
-        status_filter = self.status_var.get()
-        
-        if status_filter == 'all':
-            credits = self.db.get_all_credit_sales()
-        elif status_filter == 'overdue':
-            credits = self.db.get_overdue_credits()
-        else:
-            credits = self.db.get_all_credit_sales(status_filter)
-        
-        # Calcular estadísticas
-        active_count = 0
-        total_pending = 0
-        overdue_count = 0
-        today = datetime.now().strftime('%Y-%m-%d')
-        
-        # Insertar en tabla
-        for credit in credits:
-            status_text = 'Activo' if credit['status'] == 'active' else 'Pagado'
-            if credit['status'] == 'active' and credit['next_payment_date'] < today:
-                status_text = 'Vencido'
-                overdue_count += 1
-            
-            if credit['status'] == 'active':
-                active_count += 1
-                total_pending += credit['remaining_balance']
-            
-            self.tree.insert('', 'end', values=(
-                credit['id'],
-                credit['customer_name'],
-                format_currency(credit['total_amount']),
-                format_currency(credit['down_payment']),
-                format_currency(credit['remaining_balance']),
-                format_currency(credit['installment_amount']),
-                credit['paid_installments'],
-                credit['total_installments'],
-                credit['next_payment_date'],
-                status_text
-            ), tags=(credit['status'],))
-        
-        # Actualizar estadísticas
+        for i in self.tree.get_children(): self.tree.delete(i)
+        sf=self.status_var.get()
+        credits=self.db.get_all_credit_sales() if sf=='all' \
+            else self.db.get_overdue_credits() if sf=='overdue' \
+            else self.db.get_all_credit_sales(sf)
+        active_count=0; total_pending=0; overdue_count=0
+        today=datetime.now().strftime('%Y-%m-%d')
+        for c in credits:
+            status=c.get('status','active')
+            nxt=c.get('next_payment_date','')
+            is_overdue=status=='active' and nxt and nxt<today
+            if is_overdue: overdue_count+=1; tag='overdue'
+            elif status=='active': tag='active'
+            else: tag='paid'
+            if status=='active': active_count+=1; total_pending+=c.get('remaining_balance',0)
+            status_txt='Vencido' if is_overdue else ('Activo' if status=='active' else 'Pagado')
+            self.tree.insert('','end',tags=(tag,),values=(
+                c.get('id',''),c.get('customer_name',''),
+                format_currency(c.get('total_amount',0)),
+                format_currency(c.get('down_payment',0)),
+                format_currency(c.get('remaining_balance',0)),
+                format_currency(c.get('installment_amount',0)),
+                c.get('paid_installments',0),c.get('total_installments',0),
+                nxt or '—',status_txt))
         self.card_active.value_label.config(text=str(active_count))
         self.card_pending.value_label.config(text=format_currency(total_pending))
         self.card_overdue.value_label.config(text=str(overdue_count))
-        
-        # Colorear filas vencidas
-        self.tree.tag_configure('active', background='white')
-        self.tree.tag_configure('paid', background='#d1fae5')
-    
-    def on_credit_select(self, event):
-        """Maneja la selección de un crédito"""
-        selection = self.tree.selection()
-        if selection:
-            item = self.tree.item(selection[0])
-            self.selected_credit_id = item['values'][0]
-            
-            # Habilitar botones solo si está activo
-            status = item['values'][9]
-            if status in ['Activo', 'Vencido']:
-                self.btn_pay.config(state='normal')
-                self.btn_change_date.config(state='normal')
-            else:
-                self.btn_pay.config(state='disabled')
-                self.btn_change_date.config(state='disabled')
-            
-            self.btn_history.config(state='normal')
+
+    def _on_select(self,_=None):
+        sel=self.tree.selection()
+        if sel:
+            self.selected_credit_id=self.tree.item(sel[0])['values'][0]
+            status=self.tree.item(sel[0])['values'][9]
+            can=status in('Activo','Vencido')
+            self.btn_pay.enable() if can else self.btn_pay.disable()
+            self.btn_date.enable() if can else self.btn_date.disable()
+            self.btn_hist.enable()
         else:
-            self.selected_credit_id = None
-            self.btn_pay.config(state='disabled')
-            self.btn_history.config(state='disabled')
-            self.btn_change_date.config(state='disabled')
-    
+            self.selected_credit_id=None
+            for b in [self.btn_pay,self.btn_hist,self.btn_date]: b.config(state='disabled')
+
     def show_credit_details(self):
-        """Muestra detalles completos del crédito"""
-        if not self.selected_credit_id:
-            return
-        
-        credit = self.db.get_credit_sale_by_id(self.selected_credit_id)
-        if not credit:
-            return
-        
-        # Crear ventana de detalles
-        details_window = tk.Toplevel(self.parent)
-        details_window.title(f"Detalles del Crédito #{credit['id']}")
-        details_window.geometry("500x400")
-        details_window.update_idletasks()
-        _sw = details_window.winfo_screenwidth()
-        _sh = details_window.winfo_screenheight()
-        details_window.geometry(f"500x400+{(_sw-500)//2}+{(_sh-400)//2}")
-        details_window.configure(bg=COLORS['bg_card'])
-        details_window.transient(self.parent)
-        
-        # Contenido
-        content = tk.Frame(details_window, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
-        content.pack(fill='both', expand=True)
-        
-        info = [
-            ("Cliente:", credit['customer_name']),
-            ("Teléfono:", credit['phone'] or 'N/A'),
-            ("Total de la venta:", format_currency(credit['total_amount'])),
-            ("Cuota inicial:", format_currency(credit['down_payment'])),
-            ("Saldo restante:", format_currency(credit['remaining_balance'])),
-            ("Frecuencia de pago:", CREDIT['payment_frequencies'][credit['payment_frequency']]['name']),
-            ("Monto de cuota:", format_currency(credit['installment_amount'])),
-            ("Cuotas pagadas:", f"{credit['paid_installments']} de {credit['total_installments']}"),
-            ("Próximo pago:", credit['next_payment_date']),
-            ("Estado:", 'Activo' if credit['status'] == 'active' else 'Pagado'),
-        ]
-        
-        for i, (label, value) in enumerate(info):
-            tk.Label(
-                content,
-                text=label,
-                font=(FONTS['family'], FONTS['body'], 'bold'),
-                bg=COLORS['bg_card'],
-                fg=COLORS['text_primary'],
-                anchor='w'
-            ).grid(row=i, column=0, sticky='w', pady=5)
-            
-            tk.Label(
-                content,
-                text=str(value),
-                font=(FONTS['family'], FONTS['body']),
-                bg=COLORS['bg_card'],
-                fg=COLORS['text_secondary']
-            ).grid(row=i, column=1, sticky='w', padx=SPACING['md'], pady=5)
-    
+        if not self.selected_credit_id: return
+        c=self.db.get_credit_sale_by_id(self.selected_credit_id)
+        if not c: return
+        dlg=tk.Toplevel(self.parent); dlg.title(f"Crédito #{c['id']}")
+        dlg.configure(bg=THEME["card_bg"]); dlg.resizable(False,False)
+        dlg.transient(self.parent); _center(dlg,480,420)
+        hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=14)
+        hdr.pack(fill='x')
+        tk.Label(hdr,text=f"Crédito #{c['id']} — {c.get('customer_name','')}",
+                 font=(FONT,13,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=20)
+        content=tk.Frame(dlg,bg=THEME["card_bg"],padx=24,pady=16)
+        content.pack(fill='both',expand=True)
+        rows=[("Cliente:",c.get('customer_name','')),
+              ("Total de venta:",format_currency(c.get('total_amount',0))),
+              ("Cuota inicial:",format_currency(c.get('down_payment',0))),
+              ("Saldo restante:",format_currency(c.get('remaining_balance',0))),
+              ("Monto por cuota:",format_currency(c.get('installment_amount',0))),
+              ("Cuotas pagadas:",f"{c.get('paid_installments',0)} de {c.get('total_installments',0)}"),
+              ("Próximo pago:",c.get('next_payment_date','—')),
+              ("Estado:",'Activo' if c.get('status')=='active' else 'Pagado')]
+        for i,(lbl,val) in enumerate(rows):
+            tk.Label(content,text=lbl,font=(FONT,9,'bold'),bg=THEME["card_bg"],
+                     fg=THEME["txt_secondary"],anchor='w').grid(row=i,column=0,sticky='w',pady=5)
+            tk.Label(content,text=str(val),font=(FONT,10),bg=THEME["card_bg"],
+                     fg=THEME["txt_primary"],anchor='w').grid(row=i,column=1,sticky='w',padx=20,pady=5)
+        _btn(dlg,"Cerrar",dlg.destroy,THEME["btn_secondary"]).pack(pady=12)
+
     def show_payment_dialog(self):
-        """Muestra diálogo para registrar un pago"""
-        if not self.selected_credit_id:
-            return
-        
-        credit = self.db.get_credit_sale_by_id(self.selected_credit_id)
-        if not credit:
-            return
-        
-        dialog = tk.Toplevel(self.parent)
-        dialog.title("Registrar Pago")
-        dialog.geometry("400x350")
-        dialog.update_idletasks()
-        _sw = dialog.winfo_screenwidth()
-        _sh = dialog.winfo_screenheight()
-        dialog.geometry(f"400x350+{(_sw-400)//2}+{(_sh-350)//2}")
-        dialog.configure(bg=COLORS['bg_card'])
-        dialog.transient(self.parent)
-        dialog.grab_set()
-        
-        # Contenido
-        # Botones PRIMERO para reservar espacio inferior
-        buttons_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
-        buttons_frame.pack(fill='x', side='bottom')
+        if not self.selected_credit_id: return
+        c=self.db.get_credit_sale_by_id(self.selected_credit_id)
+        if not c: return
+        dlg=tk.Toplevel(self.parent); dlg.title("Registrar Pago")
+        dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
+        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,420,380)
 
-        form_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
-        form_frame.pack(fill='both', expand=True)
-        
-        # Información del crédito
-        tk.Label(
-            form_frame,
-            text=f"Cliente: {credit['customer_name']}",
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(anchor='w', pady=(0, SPACING['md']))
-        
-        tk.Label(
-            form_frame,
-            text=f"Saldo actual: {format_currency(credit['remaining_balance'])}",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['danger']
-        ).pack(anchor='w', pady=(0, SPACING['sm']))
-        
-        tk.Label(
-            form_frame,
-            text=f"Cuota sugerida: {format_currency(credit['installment_amount'])}",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['success']
-        ).pack(anchor='w', pady=(0, SPACING['lg']))
-        
-        # Monto del pago
-        tk.Label(
-            form_frame,
-            text="Monto a Pagar*",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(anchor='w', pady=(0, 5))
-        
-        entry_amount = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=30)
-        entry_amount.pack(fill='x', pady=(0, SPACING['md']))
-        entry_amount.insert(0, str(int(credit['installment_amount'])))
-        entry_amount.focus()
-        
-        # Notas
-        tk.Label(
-            form_frame,
-            text="Notas (opcional)",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(anchor='w', pady=(0, 5))
-        
-        entry_notes = tk.Text(form_frame, font=(FONTS['family'], FONTS['body']), width=30, height=4)
-        entry_notes.pack(fill='x', pady=(0, SPACING['lg']))
-        
-        # Botones
-        def register_payment():
+        # Botones PRIMERO
+        btn_bar=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12)
+        btn_bar.pack(fill='x',side='bottom')
+        tk.Frame(dlg,bg=THEME["card_border"],height=1).pack(fill='x',side='bottom')
+
+        hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12)
+        hdr.pack(fill='x')
+        tk.Label(hdr,text=f"💰  Registrar Pago — {c.get('customer_name','')}",
+                 font=(FONT,12,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
+
+        body=tk.Frame(dlg,bg=THEME["ct_bg"],padx=20,pady=16)
+        body.pack(fill='both',expand=True)
+        tk.Label(body,text=f"Saldo actual: {format_currency(c.get('remaining_balance',0))}",
+                 font=(FONT,12,'bold'),bg=THEME["ct_bg"],fg=THEME["acc_rose"]).pack(anchor='w',pady=(0,4))
+        tk.Label(body,text=f"Cuota sugerida: {format_currency(c.get('installment_amount',0))}",
+                 font=(FONT,10),bg=THEME["ct_bg"],fg=THEME["acc_green"]).pack(anchor='w',pady=(0,14))
+        tk.Label(body,text="Monto a Pagar",font=(FONT,10,'bold'),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,4))
+        amt_outer=tk.Frame(body,bg=THEME["input_brd"])
+        amt_inner=tk.Frame(amt_outer,bg=THEME["input_bg"])
+        amt_inner.pack(fill='x',padx=1,pady=1)
+        amt_e=tk.Entry(amt_inner,font=(FONT,13),bg=THEME["input_bg"],
+                       fg=THEME["txt_primary"],relief='flat',bd=0)
+        amt_e.pack(fill='x',padx=12,pady=10)
+        amt_outer.pack(fill='x',pady=(0,14))
+        amt_e.insert(0,str(int(c.get('installment_amount',0)))); amt_e.focus()
+        tk.Label(body,text="Notas (opcional)",font=(FONT,10,'bold'),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,4))
+        notes_t=tk.Text(body,font=(FONT,10),height=3,
+                        bg=THEME["input_bg"],relief='solid',bd=1,fg=THEME["txt_primary"])
+        notes_t.pack(fill='x')
+
+        def register():
             try:
-                amount = float(entry_amount.get())
-                if amount <= 0:
-                    messagebox.showerror("Error", "El monto debe ser mayor a 0")
-                    return
-                
-                if amount > credit['remaining_balance']:
-                    response = messagebox.askyesno(
-                        "Confirmar",
-                        f"El monto ({format_currency(amount)}) es mayor al saldo restante.\n¿Desea continuar?"
-                    )
-                    if not response:
-                        return
-                
-                notes = entry_notes.get('1.0', 'end').strip()
-                
-                # Registrar pago
-                self.db.add_credit_payment(self.selected_credit_id, amount, notes)
-                
-                messagebox.showinfo("Éxito", "Pago registrado correctamente")
-                self.load_credits()
-                dialog.destroy()
-                
-            except ValueError:
-                messagebox.showerror("Error", "Ingrese un monto válido")
-            except Exception as e:
-                messagebox.showerror("Error", f"Error al registrar pago: {str(e)}")
-        
-        btn_save = tk.Button(
-            buttons_frame,
-            text="💾 Registrar Pago",
-            command=register_payment,
-            **BUTTON_STYLES['success']
-        )
-        btn_save.pack(side='left', padx=SPACING['sm'])
-        
-        btn_cancel = tk.Button(
-            buttons_frame,
-            text="❌ Cancelar",
-            command=dialog.destroy,
-            **BUTTON_STYLES['secondary']
-        )
-        btn_cancel.pack(side='left', padx=SPACING['sm'])
-    
+                amt=float(amt_e.get())
+                if amt<=0: messagebox.showerror("Error","Monto debe ser mayor a 0",parent=dlg); return
+                if amt>c.get('remaining_balance',0):
+                    if not messagebox.askyesno("Confirmar",f"Monto mayor al saldo. ¿Continuar?",parent=dlg): return
+                self.db.add_credit_payment(self.selected_credit_id,amt,notes_t.get('1.0','end').strip())
+                messagebox.showinfo("✅ Pago registrado","Pago registrado correctamente",parent=dlg)
+                self.load_credits(); dlg.destroy()
+            except ValueError: messagebox.showerror("Error","Ingrese un monto válido",parent=dlg)
+            except Exception as e: messagebox.showerror("Error",str(e),parent=dlg)
+
+        _btn(btn_bar,"Registrar Pago",register,THEME["acc_green"],"💰").pack(side='left',padx=(0,8))
+        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
+
     def show_payment_history(self):
-        """Muestra el historial de pagos de un crédito"""
-        if not self.selected_credit_id:
-            return
-        
-        credit = self.db.get_credit_sale_by_id(self.selected_credit_id)
-        payments = self.db.get_credit_payments(self.selected_credit_id)
-        
-        # Crear ventana
-        history_window = tk.Toplevel(self.parent)
-        history_window.title(f"Historial de Pagos - {credit['customer_name']}")
-        history_window.geometry("700x500")
-        history_window.update_idletasks()
-        _sw = history_window.winfo_screenwidth()
-        _sh = history_window.winfo_screenheight()
-        history_window.geometry(f"700x500+{(_sw-700)//2}+{(_sh-500)//2}")
-        history_window.configure(bg=COLORS['bg_card'])
-        history_window.transient(self.parent)
-        
-        # Header
-        header = tk.Frame(history_window, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
-        header.pack(fill='x')
-        
-        tk.Label(
-            header,
-            text=f"Historial de Pagos - {credit['customer_name']}",
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack()
-        
-        # Tabla
-        table_frame = tk.Frame(history_window, bg=COLORS['bg_card'])
-        table_frame.pack(fill='both', expand=True, padx=SPACING['lg'], pady=SPACING['md'])
-        
-        scrollbar = ttk.Scrollbar(table_frame)
-        scrollbar.pack(side='right', fill='y')
-        
-        columns = ('Fecha', 'Monto', 'Notas')
-        tree = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show='headings',
-            yscrollcommand=scrollbar.set
-        )
-        
-        tree.heading('Fecha', text='Fecha de Pago')
-        tree.heading('Monto', text='Monto')
-        tree.heading('Notas', text='Notas')
-        
-        tree.column('Fecha', width=150, anchor='w')
-        tree.column('Monto', width=120, anchor='e')
-        tree.column('Notas', width=300, anchor='w')
-        
-        tree.pack(fill='both', expand=True)
-        scrollbar.config(command=tree.yview)
-        
-        # Insertar pagos
-        total_paid = 0
-        for payment in payments:
-            tree.insert('', 'end', values=(
-                format_date(payment['payment_date']),
-                format_currency(payment['amount']),
-                payment['notes'] or ''
-            ))
-            total_paid += payment['amount']
-        
-        # Resumen
-        summary_frame = tk.Frame(history_window, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
-        summary_frame.pack(fill='x')
-        
-        tk.Label(
-            summary_frame,
-            text=f"Total Pagado: {format_currency(total_paid)}",
-            font=(FONTS['family'], FONTS['body'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['success']
-        ).pack(side='left')
-        
-        tk.Label(
-            summary_frame,
-            text=f"Saldo Restante: {format_currency(credit['remaining_balance'])}",
-            font=(FONTS['family'], FONTS['body'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['danger']
-        ).pack(side='right')
-    
-    def show_change_date_dialog(self):
-        """Muestra diálogo para cambiar la fecha del próximo pago"""
-        if not self.selected_credit_id:
-            return
-        
-        credit = self.db.get_credit_sale_by_id(self.selected_credit_id)
-        
-        dialog = tk.Toplevel(self.parent)
-        dialog.title("Cambiar Fecha de Pago")
-        dialog.geometry("400x250")
-        dialog.update_idletasks()
-        _sw = dialog.winfo_screenwidth()
-        _sh = dialog.winfo_screenheight()
-        dialog.geometry(f"400x250+{(_sw-400)//2}+{(_sh-250)//2}")
-        dialog.configure(bg=COLORS['bg_card'])
-        dialog.transient(self.parent)
-        dialog.grab_set()
-        
-        # Botones PRIMERO para reservar espacio inferior
-        buttons_frame_date = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['md'])
-        buttons_frame_date.pack(fill='x', side='bottom')
+        if not self.selected_credit_id: return
+        c=self.db.get_credit_sale_by_id(self.selected_credit_id)
+        payments=self.db.get_credit_payments(self.selected_credit_id)
+        dlg=tk.Toplevel(self.parent); dlg.title("Historial de Pagos")
+        dlg.configure(bg=THEME["ct_bg"]); dlg.transient(self.parent); _center(dlg,600,440)
+        hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12); hdr.pack(fill='x')
+        tk.Label(hdr,text=f"📋  Historial — {c.get('customer_name','')}",
+                 font=(FONT,12,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
+        tbl=tk.Frame(dlg,bg=THEME["card_bg"]); tbl.pack(fill='both',expand=True,padx=16,pady=16)
+        cols=('Fecha','Monto','Notas')
+        tree=ttk.Treeview(tbl,columns=cols,show='headings',height=10,style='POS.Treeview')
+        for col,w in zip(cols,[160,120,280]):
+            tree.heading(col,text=col); tree.column(col,width=w,anchor='w' if col=='Notas' else 'center')
+        sb=ttk.Scrollbar(tbl,orient='vertical',command=tree.yview)
+        tree.configure(yscrollcommand=sb.set)
+        sb.pack(side='right',fill='y'); tree.pack(fill='both',expand=True)
+        total_paid=0
+        for i,p in enumerate(payments):
+            tree.insert('','end',tags=('odd' if i%2 else 'even',),values=(
+                format_date(p.get('payment_date','')),format_currency(p.get('amount',0)),p.get('notes','') or '—'))
+            total_paid+=p.get('amount',0)
+        tree.tag_configure('odd',background=THEME["row_odd"]); tree.tag_configure('even',background=THEME["row_even"])
+        sum_f=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12); sum_f.pack(fill='x')
+        tk.Label(sum_f,text=f"Total pagado: {format_currency(total_paid)}",font=(FONT,10,'bold'),
+                 bg=THEME["card_bg"],fg=THEME["acc_green"]).pack(side='left')
+        tk.Label(sum_f,text=f"Saldo restante: {format_currency(c.get('remaining_balance',0))}",
+                 font=(FONT,10,'bold'),bg=THEME["card_bg"],fg=THEME["acc_rose"]).pack(side='right')
+        _btn(dlg,"Cerrar",dlg.destroy,THEME["btn_secondary"]).pack(pady=8)
 
-        form_frame = tk.Frame(dialog, bg=COLORS['bg_card'], padx=SPACING['lg'], pady=SPACING['lg'])
-        form_frame.pack(fill='both', expand=True)
-        
-        tk.Label(
-            form_frame,
-            text=f"Cliente: {credit['customer_name']}",
-            font=(FONTS['family'], FONTS['heading'], 'bold'),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(anchor='w', pady=(0, SPACING['md']))
-        
-        tk.Label(
-            form_frame,
-            text=f"Fecha actual: {credit['next_payment_date']}",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_secondary']
-        ).pack(anchor='w', pady=(0, SPACING['lg']))
-        
-        tk.Label(
-            form_frame,
-            text="Nueva Fecha de Pago* (YYYY-MM-DD)",
-            font=(FONTS['family'], FONTS['body']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_primary']
-        ).pack(anchor='w', pady=(0, 5))
-        
-        entry_date = tk.Entry(form_frame, font=(FONTS['family'], FONTS['body']), width=30)
-        entry_date.pack(fill='x', pady=(0, SPACING['lg']))
-        entry_date.insert(0, credit['next_payment_date'])
-        entry_date.focus()
-        
-        def update_date():
+    def show_change_date_dialog(self):
+        if not self.selected_credit_id: return
+        c=self.db.get_credit_sale_by_id(self.selected_credit_id)
+        dlg=tk.Toplevel(self.parent); dlg.title("Cambiar Fecha de Pago")
+        dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
+        dlg.transient(self.parent); dlg.grab_set(); _center(dlg,400,260)
+        # Botones PRIMERO
+        btn_bar=tk.Frame(dlg,bg=THEME["card_bg"],padx=16,pady=12)
+        btn_bar.pack(fill='x',side='bottom')
+        tk.Frame(dlg,bg=THEME["card_border"],height=1).pack(fill='x',side='bottom')
+        hdr=tk.Frame(dlg,bg=THEME["sb_bg"],pady=12); hdr.pack(fill='x')
+        tk.Label(hdr,text=f"📅  Cambiar Fecha — {c.get('customer_name','')}",
+                 font=(FONT,12,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
+        body=tk.Frame(dlg,bg=THEME["ct_bg"],padx=20,pady=16); body.pack(fill='both',expand=True)
+        tk.Label(body,text=f"Fecha actual: {c.get('next_payment_date','—')}",font=(FONT,10),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,12))
+        tk.Label(body,text="Nueva Fecha (YYYY-MM-DD)",font=(FONT,10,'bold'),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,4))
+        date_outer=tk.Frame(body,bg=THEME["input_brd"])
+        date_inner=tk.Frame(date_outer,bg=THEME["input_bg"])
+        date_inner.pack(fill='x',padx=1,pady=1)
+        date_e=tk.Entry(date_inner,font=(FONT,12),bg=THEME["input_bg"],
+                        fg=THEME["txt_primary"],relief='flat',bd=0)
+        date_e.pack(fill='x',padx=12,pady=9)
+        date_outer.pack(fill='x'); date_e.insert(0,c.get('next_payment_date','')); date_e.focus()
+        def update():
             try:
-                new_date = entry_date.get()
-                # Validar formato
-                datetime.strptime(new_date, '%Y-%m-%d')
-                
-                self.db.update_next_payment_date(self.selected_credit_id, new_date)
-                messagebox.showinfo("Éxito", "Fecha actualizada correctamente")
-                self.load_credits()
-                dialog.destroy()
-                
-            except ValueError:
-                messagebox.showerror("Error", "Formato de fecha inválido. Use YYYY-MM-DD")
-            except Exception as e:
-                messagebox.showerror("Error", f"Error al actualizar: {str(e)}")
-        
-        tk.Button(buttons_frame_date, text="💾 Actualizar", command=update_date,
-                 **BUTTON_STYLES['success']).pack(side='left', padx=SPACING['sm'])
-        tk.Button(buttons_frame_date, text="❌ Cancelar", command=dialog.destroy,
-                 **BUTTON_STYLES['secondary']).pack(side='left', padx=SPACING['sm'])
+                datetime.strptime(date_e.get(),'%Y-%m-%d')
+                self.db.update_next_payment_date(self.selected_credit_id,date_e.get())
+                messagebox.showinfo("✅","Fecha actualizada",parent=dlg)
+                self.load_credits(); dlg.destroy()
+            except ValueError: messagebox.showerror("Error","Use el formato YYYY-MM-DD",parent=dlg)
+            except Exception as e: messagebox.showerror("Error",str(e),parent=dlg)
+        _btn(btn_bar,"Actualizar",update,THEME["acc_green"],"💾").pack(side='left',padx=(0,8))
+        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')

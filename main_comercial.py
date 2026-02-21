@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-main_comercial.py
-Sistema de Punto de Venta (POS) v1.1
-Venialgo Sistemas
+main_comercial.py — Venialgo Sistemas POS v1.1
+Dashboard moderno con sidebar oscuro + contenido claro
+Inspirado en Stripe / Linear / SaaS 2025
 """
 
 import tkinter as tk
 from tkinter import ttk, messagebox
 import os, sys
+from datetime import datetime
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from config.settings import COLORS, FONTS, WINDOW, SPACING, BUTTON_STYLES
 from database.db_manager import DatabaseManager
 from license.license_manager import is_licensed
 from backup.backup_manager import backup_service
@@ -21,38 +21,168 @@ from modules.admin.admin_ui import _ensure_tables
 from modules.admin.license_ui import eula_accepted, EULAWindow, ActivationWindow
 from modules.admin.login_window import LoginWindow
 from modules.admin.first_run_wizard import is_first_run, FirstRunWizard
-from utils.company_header import CompanyHeaderWidget, add_footer, get_company
+from utils.company_header import get_company
 
 APP_VERSION = "1.1"
 _ensure_tables()
 
+# ══════════════════════════════════════════════════════════════
+#  PALETA DE COLORES
+# ══════════════════════════════════════════════════════════════
+# Inspiración: sidebar azul marino profundo + contenido gris muy claro
+# Acento: azul eléctrico para highlights y activos
+# Enfoque: contraste limpio, sin bordes gruesos, espaciado generoso
 
-# ================================================================
-#  FLUJO DE ARRANQUE — maquina de estados secuencial
-# ================================================================
+THEME = {
+    # Sidebar
+    "sb_bg":        "#111827",   # Casi negro (gray-900)
+    "sb_hover":     "#1F2937",   # gray-800
+    "sb_active":    "#1D4ED8",   # blue-700 — estado activo
+    "sb_active_bg": "#1E3A8A",   # blue-900 bg para activo
+    "sb_text":      "#9CA3AF",   # gray-400
+    "sb_text_act":  "#FFFFFF",
+    "sb_logo_bg":   "#1D4ED8",   # azul logo
+
+    # Topbar
+    "tb_bg":        "#FFFFFF",
+    "tb_border":    "#E5E7EB",   # gray-200
+    "tb_text":      "#111827",
+    "tb_sub":       "#6B7280",   # gray-500
+
+    # Contenido
+    "ct_bg":        "#F9FAFB",   # gray-50
+    "card_bg":      "#FFFFFF",
+    "card_border":  "#E5E7EB",
+
+    # Acentos por módulo
+    "acc_blue":     "#2563EB",
+    "acc_green":    "#059669",
+    "acc_amber":    "#D97706",
+    "acc_rose":     "#E11D48",
+    "acc_purple":   "#7C3AED",
+    "acc_cyan":     "#0891B2",
+
+    # Texto
+    "txt_primary":  "#111827",
+    "txt_secondary":"#6B7280",
+    "txt_muted":    "#9CA3AF",
+    "txt_white":    "#FFFFFF",
+
+    # Botones
+    "btn_primary":  "#2563EB",
+    "btn_danger":   "#DC2626",
+    "btn_logout":   "#7F1D1D",
+}
+
+FONT     = "Segoe UI"
+FONT_MONO= "Consolas"
+
+
+# ══════════════════════════════════════════════════════════════
+#  WIDGETS REUTILIZABLES
+# ══════════════════════════════════════════════════════════════
+
+def make_card(parent, padx=20, pady=16, **kw):
+    """Frame tipo card con fondo blanco y borde suave."""
+    outer = tk.Frame(parent, bg=THEME["card_border"])
+    outer.pack_propagate(True)
+    inner = tk.Frame(outer, bg=THEME["card_bg"],
+                     padx=padx, pady=pady, **kw)
+    inner.pack(fill='both', expand=True, padx=1, pady=1)
+    return outer, inner
+
+
+def stat_card(parent, title, value, accent, icon=""):
+    """Card de estadística con ícono, título y valor."""
+    outer = tk.Frame(parent, bg=THEME["card_border"])
+    inner = tk.Frame(outer, bg=THEME["card_bg"], padx=20, pady=18)
+    inner.pack(fill='both', expand=True, padx=1, pady=1)
+
+    # Ícono + título en la misma fila
+    top = tk.Frame(inner, bg=THEME["card_bg"])
+    top.pack(fill='x')
+    tk.Label(top, text=icon, font=(FONT, 14),
+             bg=THEME["card_bg"], fg=accent).pack(side='left')
+    tk.Label(top, text=f"  {title}",
+             font=(FONT, 9),
+             bg=THEME["card_bg"], fg=THEME["txt_secondary"]).pack(side='left')
+
+    # Valor destacado
+    tk.Label(inner, text=value,
+             font=(FONT, 22, 'bold'),
+             bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(anchor='w', pady=(8, 0))
+
+    # Barra de color inferior
+    tk.Frame(inner, bg=accent, height=3).pack(fill='x', pady=(12, 0))
+
+    return outer
+
+
+class SidebarButton(tk.Frame):
+    """Botón de navegación del sidebar con hover y estado activo."""
+
+    def __init__(self, parent, text, icon, command, active=False, **kw):
+        super().__init__(parent, bg=THEME["sb_bg"], cursor='hand2', **kw)
+        self._cmd     = command
+        self._active  = active
+        self._text    = text
+
+        self._lbl = tk.Label(self,
+            text=f"  {icon}  {text}",
+            font=(FONT, 10),
+            bg=THEME["sb_active_bg"] if active else THEME["sb_bg"],
+            fg=THEME["sb_text_act"]  if active else THEME["sb_text"],
+            anchor='w', padx=8, pady=11, cursor='hand2')
+        self._lbl.pack(fill='x')
+
+        # Barra lateral izquierda para estado activo
+        if active:
+            tk.Frame(self, bg=THEME["sb_active"], width=3).place(
+                x=0, y=0, relheight=1)
+
+        self.bind('<Button-1>',   self._click)
+        self._lbl.bind('<Button-1>', self._click)
+        self.bind('<Enter>',      self._hover_in)
+        self.bind('<Leave>',      self._hover_out)
+        self._lbl.bind('<Enter>', self._hover_in)
+        self._lbl.bind('<Leave>', self._hover_out)
+
+    def _hover_in(self, _=None):
+        if not self._active:
+            self._lbl.config(bg=THEME["sb_hover"], fg=THEME["txt_white"])
+
+    def _hover_out(self, _=None):
+        if not self._active:
+            self._lbl.config(bg=THEME["sb_bg"], fg=THEME["sb_text"])
+
+    def _click(self, _=None):
+        if self._cmd:
+            self._cmd()
+
+    def set_active(self, active: bool):
+        self._active = active
+        if active:
+            self._lbl.config(bg=THEME["sb_active_bg"], fg=THEME["sb_text_act"])
+            tk.Frame(self, bg=THEME["sb_active"], width=3).place(x=0, y=0, relheight=1)
+        else:
+            self._lbl.config(bg=THEME["sb_bg"], fg=THEME["sb_text"])
+            for w in self.winfo_children():
+                if isinstance(w, tk.Frame):
+                    w.destroy()
+
+
+# ══════════════════════════════════════════════════════════════
+#  FLUJO DE ARRANQUE
+# ══════════════════════════════════════════════════════════════
 
 class AppStarter:
-    """
-    Maneja la secuencia de arranque usando un unico root Tk
-    y callbacks encadenados. Evita el problema de destroy.
-    """
-
-    STEP_EULA      = "eula"
-    STEP_LICENSE   = "license"
-    STEP_LOGIN     = "login"
-    STEP_WIZARD    = "wizard"
-    STEP_MAIN      = "main"
-
     def __init__(self):
-        self.root = tk.Tk()
+        self.root      = tk.Tk()
         self.root.withdraw()
-        self.root.title("Sistema POS - Venialgo Sistemas")
         self.user_data = None
 
     def start(self):
-        # Root siempre oculto hasta la ventana principal
         self.root.withdraw()
-        # Decidir primer paso
         if not eula_accepted():
             self._step_eula()
         elif not is_licensed():
@@ -61,356 +191,546 @@ class AppStarter:
             self._step_login()
         self.root.mainloop()
 
-    # ── PASO 1: EULA ─────────────────────────────────────────
     def _step_eula(self):
         def on_accept():
-            # Continuar al siguiente paso desde el event loop
             self.root.after(100, self._after_eula)
-
         def on_reject():
-            self.root.quit()
-            self.root.destroy()
-            sys.exit(0)
-
+            self.root.quit(); self.root.destroy(); sys.exit(0)
         EULAWindow(self.root, on_accept=on_accept, on_reject=on_reject)
 
     def _after_eula(self):
-        if not is_licensed():
-            self._step_license()
-        else:
-            self._step_login()
+        if not is_licensed(): self._step_license()
+        else: self._step_login()
 
-    # ── PASO 2: LICENCIA ─────────────────────────────────────
     def _step_license(self):
-        def on_success():
-            self.root.after(100, self._step_login)
-
-        def on_cancel():
-            # Permitir continuar sin licencia (modo demo)
+        _called = [False]
+        def _proceed():
+            if _called[0]: return
+            _called[0] = True
+            try:
+                if win.winfo_exists(): win.destroy()
+            except Exception: pass
             self.root.after(100, self._step_login)
 
         win = tk.Toplevel(self.root)
         win.withdraw()
-        ActivationWindow(win, on_success=on_success, on_cancel=on_cancel)
+        win.protocol("WM_DELETE_WINDOW", _proceed)
+        ActivationWindow(win, on_success=_proceed, on_cancel=_proceed)
         win.deiconify()
 
-    # ── PASO 3: LOGIN ─────────────────────────────────────────
     def _step_login(self):
+        _called = [False]
         def on_login(uid, nombre, rol):
+            if _called[0]: return
+            _called[0] = True
             self.user_data = {"id": uid, "nombre": nombre, "rol": rol}
             self.root.after(100, self._after_login)
+        def on_close():
+            self.root.quit(); self.root.destroy()
 
         win = tk.Toplevel(self.root)
         win.withdraw()
+        win.protocol("WM_DELETE_WINDOW", on_close)
         LoginWindow(win, on_success=on_login)
         win.deiconify()
 
     def _after_login(self):
-        if not self.user_data:
-            self.root.quit()
-            return
-        if is_first_run():
-            self._step_wizard()
-        else:
-            self._step_main()
+        if not self.user_data: self.root.quit(); return
+        if is_first_run(): self._step_wizard()
+        else: self._step_main()
 
-    # ── PASO 4: WIZARD PRIMERA VEZ ───────────────────────────
     def _step_wizard(self):
+        _called = [False]
         def on_complete():
+            if _called[0]: return
+            _called[0] = True
+            try:
+                if win.winfo_exists(): win.destroy()
+            except Exception: pass
             self.root.after(100, self._step_main)
 
         win = tk.Toplevel(self.root)
         win.withdraw()
+        win.protocol("WM_DELETE_WINDOW", on_complete)
         FirstRunWizard(win, on_complete=on_complete)
         win.deiconify()
 
-    # ── PASO 5: VENTANA PRINCIPAL ─────────────────────────────
     def _step_main(self):
-        if not self.user_data:
-            self.root.quit()
-            return
+        if not self.user_data: self.root.quit(); return
         self.root.deiconify()
         POSApp(self.root, current_user=self.user_data)
 
 
 def startup_flow():
-    starter = AppStarter()
-    starter.start()
+    AppStarter().start()
 
 
-# ================================================================
-#  APLICACION PRINCIPAL
-# ================================================================
+# ══════════════════════════════════════════════════════════════
+#  APLICACIÓN PRINCIPAL — DASHBOARD
+# ══════════════════════════════════════════════════════════════
 
 class POSApp:
+
+    MENU = [
+        ("🏠", "Inicio",        "home"),
+        ("🛒", "Punto de Venta","sales"),
+        ("💳", "Créditos",      "credits"),
+        ("📦", "Productos",     "products"),
+        ("👥", "Clientes",      "customers"),
+        ("📊", "Reportes",      "reports"),
+        ("⚙️", "Configuración", "admin"),
+    ]
+
     def __init__(self, root, current_user=None):
-        self.root = root
-        self.current_user = current_user or {
-            "id": 0, "nombre": "Sistema", "rol": "Administrador"
-        }
+        self.root         = root
+        self.current_user = current_user or {"id":0,"nombre":"Sistema","rol":"Administrador"}
+        self._active_key  = "home"
+        self._sb_btns     = {}
+        self._clock_job   = None
 
-        co = get_company()
-        nombre_emp = co.get("razon_social") or "Venialgo Sistemas"
+        co          = get_company()
+        self._empresa = co.get("razon_social") or "Venialgo Sistemas"
 
-        self.root.title(
-            f"{nombre_emp} - POS v{APP_VERSION} | "
-            f"{self.current_user['nombre']} [{self.current_user['rol']}]"
-        )
-        self.root.geometry(f"{WINDOW['main_width']}x{WINDOW['main_height']}")
-        self.root.minsize(WINDOW['min_width'], WINDOW['min_height'])
-        self.root.configure(bg=COLORS['bg_main'])
+        self.root.title(f"{self._empresa} — POS v{APP_VERSION}")
+        self.root.state('zoomed')          # Maximizado
+        self.root.minsize(1024, 650)
+        self.root.configure(bg=THEME["sb_bg"])
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.db = DatabaseManager()
         backup_service.start()
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        self.setup_styles()
-        try:
-            self.create_layout()
-        except Exception as e:
-            import traceback
-            err = traceback.format_exc()
-            tk.Label(self.root, text=f"ERROR en layout:\n{err}",
-                     bg="white", fg="red", justify="left",
-                     font=("Courier New", 9),
-                     wraplength=900).pack(padx=20, pady=20)
-            return
-        try:
-            self.show_sales_module()
-        except Exception as e:
-            import traceback
-            err = traceback.format_exc()
-            tk.Label(self.root, text=f"ERROR en modulo ventas:\n{err}",
-                     bg="white", fg="red", justify="left",
-                     font=("Courier New", 9),
-                     wraplength=900).pack(padx=20, pady=20)
+        self._setup_styles()
+        self._build_layout()
+        self._show_home()
 
-    # ── Estilos ───────────────────────────────────────────────
-    def setup_styles(self):
-        style = ttk.Style()
-        try: style.theme_use('clam')
+    # ── Estilos globales ──────────────────────────────────────
+    def _setup_styles(self):
+        s = ttk.Style()
+        try: s.theme_use('clam')
         except: pass
-        style.configure("Treeview",
-            background="white", foreground="black",
-            rowheight=30, fieldbackground="white", borderwidth=1)
-        style.configure("Treeview.Heading",
-            background="#1e293b", foreground="white",
-            relief="flat", borderwidth=1,
-            font=(FONTS['family'], FONTS['body'], 'bold'))
-        style.map('Treeview.Heading',
-            background=[('active','#2563eb')], foreground=[('active','white')])
-        style.map('Treeview',
-            background=[('selected','#2563eb')], foreground=[('selected','white')])
 
-    # ── Layout ────────────────────────────────────────────────
-    def create_layout(self):
-        self._build_header()
-        main = tk.Frame(self.root, bg=COLORS['bg_main'])
-        main.pack(fill='both', expand=True)
-        self._build_sidebar(main)
-        self.content_area = tk.Frame(main, bg=COLORS['bg_main'])
-        self.content_area.pack(fill='both', expand=True, side='left')
-        add_footer(self.root)
+        s.configure("POS.Treeview",
+            background=THEME["card_bg"],
+            foreground=THEME["txt_primary"],
+            fieldbackground=THEME["card_bg"],
+            rowheight=34, font=(FONT, 10),
+            borderwidth=0, relief='flat')
+        s.configure("POS.Treeview.Heading",
+            background=THEME["sb_bg"],
+            foreground=THEME["txt_white"],
+            font=(FONT, 9, 'bold'),
+            relief='flat', borderwidth=0, padding=(12, 8))
+        s.map("POS.Treeview",
+            background=[('selected', THEME["acc_blue"])],
+            foreground=[('selected', THEME["txt_white"])])
+        s.map("POS.Treeview.Heading",
+            background=[('active', THEME["acc_blue"])])
 
-    def _build_header(self):
-        outer = tk.Frame(self.root, bg=COLORS['bg_card'])
-        outer.pack(fill='x', side='top')
+        s.configure("Sidebar.TFrame", background=THEME["sb_bg"])
+        s.configure("Content.TFrame", background=THEME["ct_bg"])
 
-        self.company_widget = CompanyHeaderWidget(
-            outer, height=64, bg=COLORS['bg_card'])
-        self.company_widget.pack(side='left', fill='both', expand=True)
+    # ── Layout raíz: sidebar + main ───────────────────────────
+    def _build_layout(self):
+        # Columna izquierda (sidebar fija 220px)
+        self._sidebar = tk.Frame(self.root, bg=THEME["sb_bg"], width=220)
+        self._sidebar.pack(side='left', fill='y')
+        self._sidebar.pack_propagate(False)
 
-        frm_right = tk.Frame(outer, bg=COLORS['bg_card'])
-        frm_right.pack(side='right', padx=16, fill='y')
+        # Columna derecha (topbar + contenido)
+        right = tk.Frame(self.root, bg=THEME["ct_bg"])
+        right.pack(side='left', fill='both', expand=True)
 
-        rol    = self.current_user.get('rol', '')
-        nombre = self.current_user.get('nombre', '')
-        rol_colors = {
-            'Administrador': '#7c3aed',
-            'Supervisor':    '#0891b2',
-            'Cajero':        '#16a34a',
+        self._build_sidebar()
+        self._build_topbar(right)
+        self._build_content_area(right)
+
+    # ── SIDEBAR ───────────────────────────────────────────────
+    def _build_sidebar(self):
+        sb = self._sidebar
+
+        # Logo
+        logo_area = tk.Frame(sb, bg=THEME["sb_bg"], pady=20)
+        logo_area.pack(fill='x')
+
+        logo_circle = tk.Frame(logo_area, bg=THEME["sb_logo_bg"], width=38, height=38)
+        logo_circle.pack_propagate(False)
+        logo_circle.pack(side='left', padx=(20, 10))
+        tk.Label(logo_circle, text="V", font=(FONT, 16, 'bold'),
+                 bg=THEME["sb_logo_bg"], fg=THEME["txt_white"]).pack(expand=True)
+
+        tk.Label(logo_area, text=self._empresa,
+                 font=(FONT, 11, 'bold'),
+                 bg=THEME["sb_bg"], fg=THEME["txt_white"],
+                 wraplength=140, justify='left').pack(side='left')
+
+        # Separador
+        tk.Frame(sb, bg="#1F2937", height=1).pack(fill='x', padx=16, pady=(0, 10))
+
+        # Label sección
+        tk.Label(sb, text="NAVEGACIÓN",
+                 font=(FONT, 7, 'bold'),
+                 bg=THEME["sb_bg"], fg=THEME["sb_text"],
+                 padx=20).pack(anchor='w', pady=(4, 6))
+
+        # Filtrar por rol
+        rol   = self.current_user.get('rol', '')
+        perms = {
+            "home":     ["Administrador","Supervisor","Cajero"],
+            "sales":    ["Administrador","Supervisor","Cajero"],
+            "credits":  ["Administrador","Supervisor","Cajero"],
+            "products": ["Administrador","Supervisor"],
+            "customers":["Administrador","Supervisor"],
+            "reports":  ["Administrador","Supervisor"],
+            "admin":    ["Administrador"],
         }
-        tk.Label(frm_right, text=f" v{APP_VERSION} ",
-            font=(FONTS['family'], FONTS['small'], 'bold'),
-            bg='#334155', fg='white', padx=6, pady=2).pack(pady=(14,2))
 
-        lic_ok = is_licensed()
-        tk.Label(frm_right,
-            text=" Licenciado " if lic_ok else " Sin licencia ",
-            font=(FONTS['family'], FONTS['small'], 'bold'),
-            bg='#16a34a' if lic_ok else '#dc2626',
-            fg='white', padx=6, pady=2).pack(pady=2)
-
-        tk.Label(frm_right, text=f" {rol} ",
-            font=(FONTS['family'], FONTS['small'], 'bold'),
-            bg=rol_colors.get(rol, COLORS['primary']),
-            fg='white', padx=6, pady=2).pack(pady=2)
-
-        tk.Label(frm_right, text=f"Usuario: {nombre}",
-            font=(FONTS['family'], FONTS['small']),
-            bg=COLORS['bg_card'],
-            fg=COLORS['text_secondary']).pack(pady=(2,0))
-
-    def _build_sidebar(self, container):
-        self.sidebar = tk.Frame(
-            container, bg=COLORS['bg_sidebar'], width=220)
-        self.sidebar.pack(fill='y', side='left')
-        self.sidebar.pack_propagate(False)
-
-        tk.Label(self.sidebar, text="MENU PRINCIPAL",
-            font=(FONTS['family'], FONTS['body'], 'bold'),
-            bg=COLORS['bg_sidebar'], fg=COLORS['text_white'],
-            pady=SPACING['lg']).pack(fill='x', padx=SPACING['md'])
-
-        self.menu_buttons = {}
-        menu_items = [
-            ("Punto de Venta",  self.show_sales_module,    "sales",
-             ["Administrador","Supervisor","Cajero"]),
-            ("Creditos",        self.show_credits_module,  "credits",
-             ["Administrador","Supervisor","Cajero"]),
-            ("Productos",       self.show_products_module, "products",
-             ["Administrador","Supervisor"]),
-            ("Clientes",        self.show_customers_module,"customers",
-             ["Administrador","Supervisor"]),
-            ("Reportes",        self.show_reports_module,  "reports",
-             ["Administrador","Supervisor"]),
-        ]
-
-        rol = self.current_user.get('rol','')
-        for text, cmd, key, roles in menu_items:
-            if rol not in roles:
+        for icon, label, key in self.MENU:
+            if rol not in perms.get(key, []):
                 continue
-            btn = tk.Button(self.sidebar, text=text, command=cmd,
-                bg=COLORS['bg_sidebar'], fg=COLORS['text_white'],
-                font=(FONTS['family'], FONTS['body']),
-                relief='flat', cursor='hand2',
-                anchor='w', padx=SPACING['lg'], pady=SPACING['md'])
-            btn.pack(fill='x', padx=SPACING['sm'], pady=2)
-            self.menu_buttons[key] = btn
-            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORS['primary']))
-            btn.bind('<Leave>', lambda e, b=btn: b.config(bg=COLORS['bg_sidebar']))
-
-        if rol == 'Administrador':
-            ttk.Separator(self.sidebar).pack(fill='x', padx=SPACING['md'], pady=8)
-            btn_adm = tk.Button(self.sidebar, text="Administracion",
-                command=self.show_admin_module,
-                bg=COLORS['bg_sidebar'], fg='#a78bfa',
-                font=(FONTS['family'], FONTS['body'], 'bold'),
-                relief='flat', cursor='hand2',
-                anchor='w', padx=SPACING['lg'], pady=SPACING['md'])
-            btn_adm.pack(fill='x', padx=SPACING['sm'], pady=2)
-            self.menu_buttons['admin'] = btn_adm
-            btn_adm.bind('<Enter>', lambda e: btn_adm.config(bg='#4c1d95'))
-            btn_adm.bind('<Leave>', lambda e: btn_adm.config(bg=COLORS['bg_sidebar']))
+            btn = SidebarButton(sb, label, icon,
+                                command=lambda k=key: self._navigate(k),
+                                active=(key == self._active_key))
+            btn.pack(fill='x', padx=8, pady=1)
+            self._sb_btns[key] = btn
 
         # Espacio flexible
-        tk.Frame(self.sidebar, bg=COLORS['bg_sidebar']).pack(
-            fill='both', expand=True)
+        tk.Frame(sb, bg=THEME["sb_bg"]).pack(fill='both', expand=True)
 
-        # Backup status
-        self._lbl_backup = tk.Label(self.sidebar,
-            text="Backup: " + backup_service.last_backup_str,
-            font=(FONTS['family'], 7),
-            bg=COLORS['bg_sidebar'], fg='#475569',
-            wraplength=190, justify='left')
-        self._lbl_backup.pack(fill='x', padx=SPACING['lg'], pady=2)
+        # Separador
+        tk.Frame(sb, bg="#1F2937", height=1).pack(fill='x', padx=16, pady=8)
 
-        tk.Button(self.sidebar, text="Backup ahora",
-            command=self._manual_backup,
-            bg='#0f2d0f', fg='#4ade80',
-            font=(FONTS['family'], FONTS['small']),
-            relief='flat', cursor='hand2', pady=4).pack(
-            fill='x', padx=SPACING['sm'], pady=2)
+        # Info backup
+        self._lbl_backup = tk.Label(sb,
+            text="Backup: ---",
+            font=(FONT, 7), bg=THEME["sb_bg"], fg=THEME["sb_text"],
+            wraplength=190, justify='left', padx=20)
+        self._lbl_backup.pack(anchor='w', pady=(0, 4))
 
-        # Logout
-        btn_lo = tk.Button(self.sidebar, text="Cerrar Sesion",
-            command=self._logout,
-            bg='#7f1d1d', fg=COLORS['text_white'],
-            font=(FONTS['family'], FONTS['body'], 'bold'),
-            relief='flat', cursor='hand2', pady=SPACING['md'])
-        btn_lo.pack(fill='x', padx=SPACING['sm'], pady=(0, SPACING['sm']))
-        btn_lo.bind('<Enter>', lambda e: btn_lo.config(bg='#dc2626'))
-        btn_lo.bind('<Leave>', lambda e: btn_lo.config(bg='#7f1d1d'))
+        # Botón cerrar sesión
+        btn_lo = tk.Label(sb,
+            text="  ⏻   Cerrar Sesión",
+            font=(FONT, 10, 'bold'),
+            bg=THEME["btn_logout"], fg=THEME["txt_white"],
+            cursor='hand2', pady=12, anchor='w', padx=12)
+        btn_lo.pack(fill='x', padx=8, pady=(0, 12))
+        btn_lo.bind('<Enter>', lambda _: btn_lo.config(bg="#DC2626"))
+        btn_lo.bind('<Leave>', lambda _: btn_lo.config(bg=THEME["btn_logout"]))
+        btn_lo.bind('<Button-1>', lambda _: self._logout())
 
-    # ── Modulos ───────────────────────────────────────────────
-    def clear_content_area(self):
-        for w in self.content_area.winfo_children():
+    # ── TOPBAR ────────────────────────────────────────────────
+    def _build_topbar(self, parent):
+        tb = tk.Frame(parent, bg=THEME["tb_bg"], height=60)
+        tb.pack(fill='x', side='top')
+        tb.pack_propagate(False)
+
+        # Borde inferior
+        tk.Frame(parent, bg=THEME["tb_border"], height=1).pack(fill='x')
+
+        # Izquierda: nombre del módulo (se actualiza al navegar)
+        left = tk.Frame(tb, bg=THEME["tb_bg"])
+        left.pack(side='left', fill='y', padx=24)
+
+        self._lbl_module = tk.Label(left, text="Inicio",
+            font=(FONT, 15, 'bold'),
+            bg=THEME["tb_bg"], fg=THEME["txt_primary"])
+        self._lbl_module.pack(side='left', pady=16)
+
+        # Derecha: reloj + usuario + rol + licencia
+        right = tk.Frame(tb, bg=THEME["tb_bg"])
+        right.pack(side='right', fill='y', padx=20)
+
+        # Reloj
+        self._lbl_clock = tk.Label(right, text="",
+            font=(FONT_MONO, 10),
+            bg=THEME["tb_bg"], fg=THEME["txt_secondary"])
+        self._lbl_clock.pack(side='right', padx=(16, 0), pady=18)
+        self._tick_clock()
+
+        # Separador
+        tk.Frame(right, bg=THEME["tb_border"], width=1).pack(
+            side='right', fill='y', pady=14, padx=8)
+
+        # Badge licencia
+        lic_ok = is_licensed()
+        tk.Label(right,
+            text=" Licenciado " if lic_ok else " Sin licencia ",
+            font=(FONT, 8, 'bold'),
+            bg=THEME["acc_green"] if lic_ok else THEME["acc_rose"],
+            fg="white", padx=6, pady=3).pack(side='right', pady=20)
+
+        # Badge rol
+        rol_col = {"Administrador": THEME["acc_purple"],
+                   "Supervisor":    THEME["acc_cyan"],
+                   "Cajero":        THEME["acc_green"]}.get(
+                   self.current_user.get('rol',''), THEME["acc_blue"])
+        tk.Label(right,
+            text=f" {self.current_user.get('rol','')} ",
+            font=(FONT, 8, 'bold'),
+            bg=rol_col, fg="white", padx=6, pady=3).pack(side='right', pady=20, padx=4)
+
+        # Nombre usuario
+        tk.Label(right,
+            text=f"👤  {self.current_user.get('nombre','')}",
+            font=(FONT, 10),
+            bg=THEME["tb_bg"], fg=THEME["txt_primary"]).pack(side='right', pady=18)
+
+    def _tick_clock(self):
+        now = datetime.now().strftime("%a %d %b  %H:%M:%S")
+        self._lbl_clock.config(text=now)
+        self._clock_job = self.root.after(1000, self._tick_clock)
+
+    # ── ÁREA DE CONTENIDO ─────────────────────────────────────
+    def _build_content_area(self, parent):
+        self._content = tk.Frame(parent, bg=THEME["ct_bg"])
+        self._content.pack(fill='both', expand=True)
+
+    def _clear_content(self):
+        for w in self._content.winfo_children():
             w.destroy()
 
-    def highlight_menu_button(self, active_key):
-        for key, btn in self.menu_buttons.items():
-            if key == active_key:
-                btn.config(bg=COLORS['primary'], fg=COLORS['text_white'])
-            else:
-                fg = '#a78bfa' if key == 'admin' else COLORS['text_white']
-                btn.config(bg=COLORS['bg_sidebar'], fg=fg)
+    # ── NAVEGACIÓN ────────────────────────────────────────────
+    def _navigate(self, key):
+        # Desactivar botón anterior
+        if self._active_key in self._sb_btns:
+            self._sb_btns[self._active_key].set_active(False)
+        self._active_key = key
+        if key in self._sb_btns:
+            self._sb_btns[key].set_active(True)
 
-    def show_sales_module(self):
-        self.clear_content_area()
-        self.highlight_menu_button('sales')
+        # Nombre módulo en topbar
+        labels = {k: l for _, l, k in self.MENU}
+        self._lbl_module.config(text=labels.get(key, ""))
+
+        self._clear_content()
+        dispatch = {
+            "home":     self._show_home,
+            "sales":    self._show_module_sales,
+            "credits":  self._show_module_credits,
+            "products": self._show_module_products,
+            "customers":self._show_module_customers,
+            "reports":  self._show_module_reports,
+            "admin":    self._show_module_admin,
+        }
+        dispatch.get(key, self._show_home)()
+
+    # ── HOME: DASHBOARD ───────────────────────────────────────
+    def _show_home(self):
+        ct = self._content
+        scroll_canvas = tk.Canvas(ct, bg=THEME["ct_bg"], highlightthickness=0)
+        scrollbar     = ttk.Scrollbar(ct, orient='vertical',
+                                      command=scroll_canvas.yview)
+        scroll_canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        scroll_canvas.pack(side='left', fill='both', expand=True)
+
+        page = tk.Frame(scroll_canvas, bg=THEME["ct_bg"])
+        win_id = scroll_canvas.create_window((0,0), window=page, anchor='nw')
+
+        def _on_resize(e):
+            scroll_canvas.itemconfig(win_id, width=e.width)
+        def _on_frame(e):
+            scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all'))
+        scroll_canvas.bind('<Configure>', _on_resize)
+        page.bind('<Configure>', _on_frame)
+        scroll_canvas.bind_all('<MouseWheel>',
+            lambda e: scroll_canvas.yview_scroll(-1*(e.delta//120), 'units'))
+
+        pad = {"padx": 28, "pady": 0}
+
+        # ── Bienvenida ────────────────────────────────────────
+        greeting = tk.Frame(page, bg=THEME["ct_bg"])
+        greeting.pack(fill='x', padx=28, pady=(24, 0))
+        hoy = datetime.now().strftime("%A, %d de %B de %Y").capitalize()
+        tk.Label(greeting, text=f"Bienvenido, {self.current_user.get('nombre','')} 👋",
+                 font=(FONT, 16, 'bold'),
+                 bg=THEME["ct_bg"], fg=THEME["txt_primary"]).pack(anchor='w')
+        tk.Label(greeting, text=hoy,
+                 font=(FONT, 9),
+                 bg=THEME["ct_bg"], fg=THEME["txt_secondary"]).pack(anchor='w', pady=(2,0))
+
+        # ── Línea separadora ─────────────────────────────────
+        tk.Frame(page, bg=THEME["card_border"], height=1).pack(
+            fill='x', padx=28, pady=16)
+
+        # ── Cards de estadísticas ─────────────────────────────
+        tk.Label(page, text="Resumen del día",
+                 font=(FONT, 10, 'bold'),
+                 bg=THEME["ct_bg"], fg=THEME["txt_secondary"]).pack(
+                 anchor='w', padx=28, pady=(0, 10))
+
+        cards_row = tk.Frame(page, bg=THEME["ct_bg"])
+        cards_row.pack(fill='x', padx=24, pady=(0, 20))
+
+        # Obtener datos reales
+        stats = self._get_today_stats()
+
+        cards_data = [
+            ("Ventas del día",    stats["count"],     THEME["acc_blue"],   "🛒"),
+            ("Ingresos",          stats["revenue"],   THEME["acc_green"],  "💰"),
+            ("Productos vendidos",stats["items"],     THEME["acc_amber"],  "📦"),
+            ("Créditos activos",  stats["credits"],   THEME["acc_purple"], "💳"),
+        ]
+
+        for i, (title, val, accent, icon) in enumerate(cards_data):
+            card = stat_card(cards_row, title, val, accent, icon)
+            card.grid(row=0, column=i, sticky='nsew', padx=4, pady=4)
+            cards_row.columnconfigure(i, weight=1)
+
+        # ── Separador ─────────────────────────────────────────
+        tk.Frame(page, bg=THEME["card_border"], height=1).pack(
+            fill='x', padx=28, pady=(4, 16))
+
+        # ── Tabla últimas ventas ──────────────────────────────
+        bottom = tk.Frame(page, bg=THEME["ct_bg"])
+        bottom.pack(fill='both', expand=True, padx=28, pady=(0, 28))
+        bottom.columnconfigure(0, weight=3)
+        bottom.columnconfigure(1, weight=2)
+
+        # Card tabla
+        tbl_outer = tk.Frame(bottom, bg=THEME["card_border"])
+        tbl_outer.grid(row=0, column=0, sticky='nsew', padx=(0,8))
+        tbl_inner = tk.Frame(tbl_outer, bg=THEME["card_bg"])
+        tbl_inner.pack(fill='both', expand=True, padx=1, pady=1)
+
+        tk.Label(tbl_inner, text="Últimas ventas",
+                 font=(FONT, 11, 'bold'),
+                 bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(
+                 anchor='w', padx=16, pady=(14,8))
+        tk.Frame(tbl_inner, bg=THEME["card_border"], height=1).pack(fill='x')
+
+        cols = ('ID','Fecha','Cliente','Total','Método')
+        tree = ttk.Treeview(tbl_inner, columns=cols, show='headings',
+                            height=8, style='POS.Treeview')
+        for col, w in zip(cols, [50,130,180,110,100]):
+            tree.heading(col, text=col)
+            tree.column(col, width=w,
+                        anchor='center' if col in ('ID','Total') else 'w')
+
+        sb_tree = ttk.Scrollbar(tbl_inner, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=sb_tree.set)
+        sb_tree.pack(side='right', fill='y', padx=(0,4), pady=4)
+        tree.pack(fill='both', expand=True, padx=4, pady=(4,12))
+
+        # Insertar datos
+        from utils.formatters import format_currency
+        ventas = self.db.get_sales_by_date(
+            datetime.now().strftime('%Y-%m-%d'),
+            datetime.now().strftime('%Y-%m-%d')
+        )
+        for v in ventas[:30]:
+            tree.insert('', 'end', values=(
+                v.get('id',''),
+                v.get('fecha','')[:16] if v.get('fecha') else '',
+                v.get('customer_name','') or 'Consumidor Final',
+                format_currency(v.get('total',0)),
+                v.get('payment_method',''),
+            ))
+
+        # Alternar colores filas
+        tree.tag_configure('odd',  background='#F9FAFB')
+        tree.tag_configure('even', background=THEME["card_bg"])
+        for i, iid in enumerate(tree.get_children()):
+            tree.item(iid, tags=('odd' if i%2 else 'even',))
+
+        # Card accesos rápidos
+        act_outer = tk.Frame(bottom, bg=THEME["card_border"])
+        act_outer.grid(row=0, column=1, sticky='nsew', padx=(8,0))
+        act_inner = tk.Frame(act_outer, bg=THEME["card_bg"])
+        act_inner.pack(fill='both', expand=True, padx=1, pady=1)
+
+        tk.Label(act_inner, text="Accesos rápidos",
+                 font=(FONT, 11, 'bold'),
+                 bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(
+                 anchor='w', padx=16, pady=(14,8))
+        tk.Frame(act_inner, bg=THEME["card_border"], height=1).pack(fill='x')
+
+        quick_actions = [
+            ("🛒  Nueva venta",     THEME["acc_blue"],   "sales"),
+            ("💳  Ver créditos",    THEME["acc_purple"], "credits"),
+            ("📦  Agregar producto",THEME["acc_amber"],  "products"),
+            ("👥  Nuevo cliente",   THEME["acc_green"],  "customers"),
+            ("📊  Ver reportes",    THEME["acc_cyan"],   "reports"),
+        ]
+        for label, color, key in quick_actions:
+            btn = tk.Label(act_inner, text=label,
+                font=(FONT, 10), bg=color, fg="white",
+                cursor='hand2', padx=16, pady=10, anchor='w')
+            btn.pack(fill='x', padx=12, pady=4)
+            btn.bind('<Enter>', lambda e, b=btn, c=color:
+                b.config(bg=self._darken(c)))
+            btn.bind('<Leave>', lambda e, b=btn, c=color: b.config(bg=c))
+            btn.bind('<Button-1>', lambda e, k=key: self._navigate(k))
+
+    def _darken(self, hex_color):
+        """Oscurece un color hex un 15%."""
+        r,g,b = int(hex_color[1:3],16), int(hex_color[3:5],16), int(hex_color[5:7],16)
+        return f"#{max(0,int(r*0.85)):02x}{max(0,int(g*0.85)):02x}{max(0,int(b*0.85)):02x}"
+
+    def _get_today_stats(self):
+        try:
+            hoy = datetime.now().strftime('%Y-%m-%d')
+            s   = self.db.get_sales_summary(hoy, hoy)
+            from utils.formatters import format_currency
+            credits = self.db.get_all_credit_sales('active')
+            items = self.db.execute_scalar(
+                """SELECT COALESCE(SUM(d.cantidad),0) FROM detalle_ventas d
+                   JOIN ventas v ON d.venta_id=v.id
+                   WHERE v.fecha >= ?""", (hoy,)) or 0
+            return {
+                "count":   str(s.get('total_sales', 0)),
+                "revenue": format_currency(s.get('total_revenue', 0)),
+                "items":   str(int(items)),
+                "credits": str(len(credits)),
+            }
+        except Exception:
+            return {"count":"0","revenue":"Gs. 0","items":"0","credits":"0"}
+
+    # ── MÓDULOS ───────────────────────────────────────────────
+    def _show_module_sales(self):
         from modules.sales.sale_ui import SalesModule
-        SalesModule(self.content_area, self.db)
+        SalesModule(self._content, self.db)
 
-    def show_credits_module(self):
-        self.clear_content_area()
-        self.highlight_menu_button('credits')
+    def _show_module_credits(self):
         from modules.credits.credit_ui import CreditsModule
-        CreditsModule(self.content_area, self.db)
+        CreditsModule(self._content, self.db)
 
-    def show_products_module(self):
-        self.clear_content_area()
-        self.highlight_menu_button('products')
+    def _show_module_products(self):
         from modules.products.product_ui import ProductModule
-        ProductModule(self.content_area, self.db)
+        ProductModule(self._content, self.db)
 
-    def show_customers_module(self):
-        self.clear_content_area()
-        self.highlight_menu_button('customers')
+    def _show_module_customers(self):
         from modules.customers.customer_ui import CustomerModule
-        CustomerModule(self.content_area, self.db)
+        CustomerModule(self._content, self.db)
 
-    def show_reports_module(self):
-        self.clear_content_area()
-        self.highlight_menu_button('reports')
+    def _show_module_reports(self):
         from modules.reports.report_ui import ReportsModule
-        ReportsModule(self.content_area, self.db)
+        ReportsModule(self._content, self.db)
 
-    def show_admin_module(self):
-        self.clear_content_area()
-        self.highlight_menu_button('admin')
+    def _show_module_admin(self):
         from modules.admin.admin_ui import AdminModule
-        AdminModule(self.content_area, self.db, self.current_user,
+        AdminModule(self._content, self.db, self.current_user,
                     on_company_saved=self._refresh_header)
 
     def _refresh_header(self):
-        self.company_widget.refresh()
         co = get_company()
-        nombre_emp = co.get("razon_social") or "Venialgo Sistemas"
-        self.root.title(
-            f"{nombre_emp} - POS v{APP_VERSION} | "
-            f"{self.current_user['nombre']} [{self.current_user['rol']}]"
-        )
+        self._empresa = co.get("razon_social") or "Venialgo Sistemas"
+        self.root.title(f"{self._empresa} — POS v{APP_VERSION}")
 
-    # ── Backup / Logout / Close ───────────────────────────────
-    def _manual_backup(self):
-        ok, msg = backup_service.force_backup()
-        self._lbl_backup.config(
-            text="Backup: " + backup_service.last_backup_str)
-        if ok:
-            messagebox.showinfo("Backup OK", f"Backup creado.\n{msg}")
-        else:
-            messagebox.showerror("Error backup", f"Error:\n{msg}")
-
+    # ── CIERRE / LOGOUT ───────────────────────────────────────
     def _on_close(self):
+        if self._clock_job:
+            self.root.after_cancel(self._clock_job)
         try: backup_service.stop()
         except: pass
         self.root.destroy()
 
     def _logout(self):
-        if messagebox.askyesno("Cerrar Sesion", "Desea cerrar la sesion?"):
+        if messagebox.askyesno("Cerrar Sesión", "¿Desea cerrar la sesión?"):
+            if self._clock_job:
+                self.root.after_cancel(self._clock_job)
             try: backup_service.stop()
             except: pass
-            # Reiniciar aplicacion
             self.root.destroy()
             startup_flow()
 
