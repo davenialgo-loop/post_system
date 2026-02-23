@@ -12,10 +12,12 @@ def set_icon(window):
     root_dir = os.path.dirname(base)
 
     candidates_ico = [
-        os.path.join(root_dir, 'assets', 'venialgosist.ico'),
-        os.path.join(root_dir, 'assets', 'app_icon.ico'),
+        os.path.join(base,     'assets', 'icon.ico'),
+        os.path.join(root_dir, 'assets', 'icon.ico'),
         os.path.join(base,     'assets', 'venialgosist.ico'),
+        os.path.join(root_dir, 'assets', 'venialgosist.ico'),
         os.path.join(base,     'assets', 'app_icon.ico'),
+        os.path.join(root_dir, 'assets', 'app_icon.ico'),
     ]
     for path in candidates_ico:
         if os.path.isfile(path):

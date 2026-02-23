@@ -8,7 +8,7 @@ from tkinter import ttk, messagebox
 from config.settings import FONTS as _F
 from utils.validators import validate_required_field
 
-THEME={"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827",
+THEME={"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827","acc_purple":"#7C3AED",
     "txt_primary":"#111827","txt_secondary":"#6B7280","txt_white":"#FFFFFF",
     "acc_blue":"#2563EB","acc_green":"#059669","acc_rose":"#E11D48","acc_amber":"#D97706",
     "btn_danger":"#DC2626","btn_secondary":"#6B7280",
@@ -83,10 +83,25 @@ class CustomerModule:
         tk.Label(srch_inner,text="🔍",bg=THEME["input_bg"],fg=THEME["txt_secondary"],
                  font=(FONT,11)).pack(side='left',padx=(10,4))
         self.search_var=tk.StringVar()
-        self.search_var.trace('w',lambda *_:self.search_customers())
         srch_e=tk.Entry(srch_inner,textvariable=self.search_var,font=(FONT,11),
                         bg=THEME["input_bg"],fg=THEME["txt_primary"],relief='flat',bd=0)
         srch_e.pack(fill='x',padx=4,pady=8,side='left',expand=True)
+        # Placeholder hint
+        HINT="Buscar por nombre, RUC o N° de documento..."
+        def _ph_in(e):
+            if srch_e.get()==HINT:
+                srch_e.delete(0,'end'); srch_e.config(fg=THEME["txt_primary"])
+        def _ph_out(e):
+            if not srch_e.get():
+                srch_e.insert(0,HINT); srch_e.config(fg=THEME["txt_secondary"])
+        _ph_out(None)
+        srch_e.bind("<FocusIn>",  _ph_in)
+        srch_e.bind("<FocusOut>", _ph_out)
+        def _smart_search(*_):
+            term = self.search_var.get()
+            if term == HINT: return
+            self.load_customers(term)
+        self.search_var.trace('w', _smart_search)
         srch_outer.pack(side='left',fill='x',expand=True,padx=(0,12))
         _btn(tb,"Nuevo Cliente",self.show_add_dialog,THEME["acc_blue"],"＋").pack(side='right')
 
@@ -94,6 +109,10 @@ class CustomerModule:
         stats=tk.Frame(self.parent,bg=bg,padx=24); stats.pack(fill='x',pady=(0,12))
         self.lbl_total=tk.Label(stats,text="Total: 0 clientes",font=(FONT,9),
                                 bg=bg,fg=THEME["txt_secondary"]); self.lbl_total.pack(side='left')
+        self.lbl_search_hint=tk.Label(stats,
+            text="  🔍 Busca por nombre, RUC o N° documento",
+            font=(FONT,8),bg=bg,fg=THEME["txt_secondary"])
+        self.lbl_search_hint.pack(side='left',padx=(16,0))
 
         # Tabla
         tbl_outer=tk.Frame(self.parent,bg=THEME["card_border"])
@@ -137,6 +156,15 @@ class CustomerModule:
         self.tree.tag_configure('odd',background=THEME["row_odd"])
         self.tree.tag_configure('even',background=THEME["row_even"])
         self.lbl_total.config(text=f"Total: {len(customers)} cliente{'s' if len(customers)!=1 else ''}")
+        if hasattr(self,'lbl_search_hint'):
+            if search_term:
+                self.lbl_search_hint.config(
+                    text=f"  🔍 Filtrando por: '{search_term}'",
+                    fg=THEME["acc_blue"])
+            else:
+                self.lbl_search_hint.config(
+                    text="  🔍 Busca por nombre, RUC o N° documento",
+                    fg=THEME["txt_secondary"])
 
     def search_customers(self): self.load_customers(self.search_var.get())
 

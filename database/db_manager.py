@@ -319,10 +319,20 @@ class DatabaseManager:
 
     def search_clients(self, query):
         conn = self._conn()
-        q = f"%{query}%"
-        rows = conn.execute(
-            "SELECT * FROM clientes WHERE activo=1 AND (nombre LIKE ? OR ruc LIKE ?)",
-            (q, q)).fetchall()
+        # Normalizar: quitar espacios/guiones para buscar CI/RUC con o sin formato
+        q_raw   = f"%{query.strip()}%"
+        q_clean = f"%{query.strip().replace('-','').replace(' ','')}%"
+        # Buscar por nombre, ruc, telefono — con y sin guiones
+        rows = conn.execute("""
+            SELECT * FROM clientes
+            WHERE activo=1 AND (
+                nombre   LIKE ? COLLATE NOCASE OR
+                ruc      LIKE ? COLLATE NOCASE OR
+                ruc      LIKE ? COLLATE NOCASE OR
+                telefono LIKE ? COLLATE NOCASE
+            )
+            ORDER BY nombre""",
+            (q_raw, q_raw, q_clean, q_raw)).fetchall()
         conn.close()
         return [_client_aliases(dict(r)) for r in rows]
 

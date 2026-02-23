@@ -69,7 +69,7 @@ def build():
     ]
 
     # Icono - solo agregar si existe Y es valido
-    icon_path = os.path.join("assets", "venialgo.ico")
+    icon_path = os.path.join("assets", "icon.ico")
     if os.path.exists(icon_path):
         # Verificar que PIL puede abrirlo antes de pasarlo a PyInstaller
         try:

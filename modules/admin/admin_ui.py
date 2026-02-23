@@ -433,20 +433,36 @@ class AdminModule:
             ("cuota_pct","Recargo Cuotas (%)","Recargo por financiamiento en cuotas",THEME["acc_amber"]),
             ("mayoreo_pct","Descuento Mayoreo (%)","Descuento para ventas al por mayor",THEME["acc_purple"]),
         ]
-        for key,lbl,desc,accent in price_labels:
-            row=tk.Frame(card,bg=THEME["card_bg"])
-            row.pack(fill='x',pady=(0,16))
-            left=tk.Frame(row,bg=THEME["card_bg"])
-            left.pack(side='left',fill='x',expand=True)
-            tk.Label(left,text=lbl,font=(FONT,10,'bold'),bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w')
-            tk.Label(left,text=desc,font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
-            indicator=tk.Frame(left,bg=accent,width=4,height=40)
-            indicator.pack(side='left',padx=(0,8))
+        # Grid 2 columnas para mejor uso del espacio
+        grid=tk.Frame(card,bg=THEME["card_bg"])
+        grid.pack(fill='x')
+        grid.columnconfigure(0,weight=1); grid.columnconfigure(1,weight=1)
 
-            right=tk.Frame(row,bg=THEME["card_bg"],width=120)
-            right.pack(side='right',padx=(20,0))
-            right.pack_propagate(False)
-            e=_entry(right); e.pack(fill='x')
+        for idx,(key,lbl,desc,accent) in enumerate(price_labels):
+            gr,gc = divmod(idx,2)
+            cell=tk.Frame(grid,bg=THEME["card_bg"],padx=8,pady=6)
+            cell.grid(row=gr,column=gc,sticky='ew')
+
+            # Barra de color izquierda + label
+            header=tk.Frame(cell,bg=THEME["card_bg"])
+            header.pack(fill='x')
+            tk.Frame(header,bg=accent,width=4).pack(side='left',fill='y',padx=(0,8))
+            info=tk.Frame(header,bg=THEME["card_bg"])
+            info.pack(side='left',fill='x',expand=True)
+            tk.Label(info,text=lbl,font=(FONT,10,'bold'),
+                     bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w')
+            tk.Label(info,text=desc,font=(FONT,8),
+                     bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
+
+            # Entry debajo del label
+            e_outer=tk.Frame(cell,bg=accent,padx=2,pady=2)
+            e_outer.pack(fill='x',pady=(8,0))
+            e_inner=tk.Frame(e_outer,bg=THEME["input_bg"])
+            e_inner.pack(fill='x')
+            e=tk.Entry(e_inner,font=(FONT,12,'bold'),bg=THEME["input_bg"],
+                       fg=accent,relief='flat',bd=0,
+                       insertbackground=accent,justify='center')
+            e.pack(fill='x',ipady=8,padx=8)
             val=config.get(key,0)
             e.insert(0,str(val)); fields[key]=e
 

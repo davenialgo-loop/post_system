@@ -27,13 +27,13 @@ imports:
  &#8226;   <a href="#backup.backup_manager">backup.backup_manager</a>
  &#8226;   <a href="#codecs">codecs</a>
  &#8226;   <a href="#collections">collections</a>
- &#8226;   <a href="#config.settings">config.settings</a>
  &#8226;   <a href="#copyreg">copyreg</a>
  &#8226;   <a href="#cryptography">cryptography</a>
  &#8226;   <a href="#cryptography.fernet">cryptography.fernet</a>
  &#8226;   <a href="#cryptography.hazmat">cryptography.hazmat</a>
  &#8226;   <a href="#cryptography.hazmat.primitives">cryptography.hazmat.primitives</a>
  &#8226;   <a href="#database.db_manager">database.db_manager</a>
+ &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#encodings">encodings</a>
  &#8226;   <a href="#encodings.aliases">encodings.aliases</a>
  &#8226;   <a href="#encodings.ascii">encodings.ascii</a>
@@ -203,6 +203,8 @@ imports:
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#types">types</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.fecha_es">utils.fecha_es</a>
+ &#8226;   <a href="#utils.formatters">utils.formatters</a>
  &#8226;   <a href="#uuid">uuid</a>
  &#8226;   <a href="#warnings">warnings</a>
  &#8226;   <a href="#weakref">weakref</a>
@@ -441,9 +443,11 @@ imported by:
  &#8226;   <a href="#PIL._webp">PIL._webp</a>
  &#8226;   <a href="#PIL.features">PIL.features</a>
  &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#modules.admin.login_window">modules.admin.login_window</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
 
@@ -1126,9 +1130,11 @@ imported by:
  &#8226;   <a href="#PIL.XpmImagePlugin">PIL.XpmImagePlugin</a>
  &#8226;   <a href="#PIL.features">PIL.features</a>
  &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#modules.admin.login_window">modules.admin.login_window</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
 
@@ -1519,9 +1525,11 @@ imported by:
     <a href="#PIL">PIL</a>
  &#8226;   <a href="#PIL.SpiderImagePlugin">PIL.SpiderImagePlugin</a>
  &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#modules.admin.login_window">modules.admin.login_window</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
 
@@ -4280,14 +4288,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#main_comercial.py">main_comercial.py</a>
- &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
- &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
- &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
- &#8226;   <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
+    <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
  &#8226;   <a href="#modules.customers.customer_ui">modules.customers.customer_ui</a>
  &#8226;   <a href="#modules.products.product_ui">modules.products.product_ui</a>
- &#8226;   <a href="#modules.reports.report_ui">modules.reports.report_ui</a>
  &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
 
@@ -5224,6 +5227,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#importlib.metadata">importlib.metadata</a>
+ &#8226;   <a href="#modules.reports.report_ui">modules.reports.report_ui</a>
 
   </div>
 
@@ -5422,6 +5426,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
 
   </div>
 
@@ -5471,13 +5476,14 @@ imported by:
  &#8226;   <a href="#email.utils">email.utils</a>
  &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#license.license_manager">license.license_manager</a>
- &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
+ &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
  &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
  &#8226;   <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
  &#8226;   <a href="#modules.reports.report_ui">modules.reports.report_ui</a>
  &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#sqlite3.dbapi2">sqlite3.dbapi2</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.fecha_es">utils.fecha_es</a>
  &#8226;   <a href="#utils.formatters">utils.formatters</a>
 
   </div>
@@ -9858,6 +9864,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
 
   </div>
@@ -10085,16 +10092,22 @@ imported by:
   <a target="code" href="///C:/Users/NB/Desktop/post_system/modules/admin/admin_ui.py" type="text/plain"><tt>modules.admin.admin_ui</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#config.settings">config.settings</a>
- &#8226;   <a href="#datetime">datetime</a>
+    <a href="#PIL">PIL</a>
+ &#8226;   <a href="#PIL.Image">PIL.Image</a>
+ &#8226;   <a href="#PIL.ImageTk">PIL.ImageTk</a>
+ &#8226;   <a href="#database.db_manager">database.db_manager</a>
  &#8226;   <a href="#hashlib">hashlib</a>
+ &#8226;   <a href="#license.license_manager">license.license_manager</a>
  &#8226;   <a href="#modules.admin">modules.admin</a>
  &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#shutil">shutil</a>
  &#8226;   <a href="#sqlite3">sqlite3</a>
- &#8226;   <a href="#sys">sys</a>
  &#8226;   <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
+ &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
   <div class="import">
@@ -10114,7 +10127,6 @@ imports:
     <a href="#PIL">PIL</a>
  &#8226;   <a href="#PIL.Image">PIL.Image</a>
  &#8226;   <a href="#PIL.ImageTk">PIL.ImageTk</a>
- &#8226;   <a href="#config.settings">config.settings</a>
  &#8226;   <a href="#modules.admin">modules.admin</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
@@ -10124,8 +10136,6 @@ imports:
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
- &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
- &#8226;   <a href="#traceback">traceback</a>
 
   </div>
   <div class="import">
@@ -10141,17 +10151,14 @@ imported by:
   <a target="code" href="///C:/Users/NB/Desktop/post_system/modules/admin/license_ui.py" type="text/plain"><tt>modules.admin.license_ui</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#config.settings">config.settings</a>
- &#8226;   <a href="#datetime">datetime</a>
+    <a href="#datetime">datetime</a>
  &#8226;   <a href="#json">json</a>
  &#8226;   <a href="#license.license_manager">license.license_manager</a>
  &#8226;   <a href="#modules.admin">modules.admin</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#sys">sys</a>
  &#8226;   <a href="#tkinter">tkinter</a>
- &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
- &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
 
   </div>
   <div class="import">
@@ -10178,6 +10185,7 @@ imports:
  &#8226;   <a href="#sys">sys</a>
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
   <div class="import">
@@ -10216,6 +10224,7 @@ imports:
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
  &#8226;   <a href="#utils.formatters">utils.formatters</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
   <div class="import">
@@ -10252,7 +10261,9 @@ imports:
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
+ &#8226;   <a href="#utils.formatters">utils.formatters</a>
  &#8226;   <a href="#utils.validators">utils.validators</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
   <div class="import">
@@ -10291,6 +10302,7 @@ imports:
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
  &#8226;   <a href="#utils.formatters">utils.formatters</a>
  &#8226;   <a href="#utils.validators">utils.validators</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
   <div class="import">
@@ -10322,13 +10334,15 @@ imported by:
   <a target="code" href="///C:/Users/NB/Desktop/post_system/modules/reports/report_ui.py" type="text/plain"><tt>modules.reports.report_ui</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
-    <a href="#config.settings">config.settings</a>
+    <a href="#csv">csv</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#modules.reports">modules.reports</a>
  &#8226;   <a href="#tkinter">tkinter</a>
+ &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
  &#8226;   <a href="#utils.formatters">utils.formatters</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
   <div class="import">
@@ -10363,11 +10377,22 @@ imports:
     <a href="#config.settings">config.settings</a>
  &#8226;   <a href="#datetime">datetime</a>
  &#8226;   <a href="#modules.sales">modules.sales</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#subprocess">subprocess</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#threading">threading</a>
+ &#8226;   <a href="#time">time</a>
  &#8226;   <a href="#tkinter">tkinter</a>
  &#8226;   <a href="#tkinter.messagebox">tkinter.messagebox</a>
  &#8226;   <a href="#tkinter.scrolledtext">tkinter.scrolledtext</a>
  &#8226;   <a href="#tkinter.ttk">tkinter.ttk</a>
+ &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.fecha_es">utils.fecha_es</a>
  &#8226;   <a href="#utils.formatters">utils.formatters</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
+ &#8226;   <a href="#win32print">win32print</a>
+ &#8226;   <a href="#winreg">winreg</a>
 
   </div>
   <div class="import">
@@ -10643,6 +10668,7 @@ imported by:
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
  &#8226;   <a href="#modules.admin.login_window">modules.admin.login_window</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#netrc">netrc</a>
  &#8226;   <a href="#ntpath">ntpath</a>
  &#8226;   <a href="#os.path">os.path</a>
@@ -10667,6 +10693,7 @@ imported by:
  &#8226;   <a href="#tkinter.filedialog">tkinter.filedialog</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
  &#8226;   <a href="#uuid">uuid</a>
  &#8226;   <a href="#xml.sax">xml.sax</a>
  &#8226;   <a href="#xml.sax.saxutils">xml.sax.saxutils</a>
@@ -11329,6 +11356,7 @@ imported by:
  &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#backup.backup_manager">backup.backup_manager</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#tarfile">tarfile</a>
  &#8226;   <a href="#tempfile">tempfile</a>
@@ -11727,6 +11755,7 @@ imported by:
  &#8226;   <a href="#ctypes._aix">ctypes._aix</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
  &#8226;   <a href="#license.license_manager">license.license_manager</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#platform">platform</a>
  &#8226;   <a href="#uuid">uuid</a>
@@ -11807,10 +11836,10 @@ imported by:
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
  &#8226;   <a href="#mimetypes">mimetypes</a>
- &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
  &#8226;   <a href="#modules.admin.login_window">modules.admin.login_window</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#ntpath">ntpath</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib._local">pathlib._local</a>
@@ -11844,6 +11873,7 @@ imported by:
  &#8226;   <a href="#typing">typing</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
  &#8226;   <a href="#uuid">uuid</a>
  &#8226;   <a href="#warnings">warnings</a>
  &#8226;   <a href="#weakref">weakref</a>
@@ -11943,6 +11973,7 @@ imported by:
  &#8226;   <a href="#PIL.JpegImagePlugin">PIL.JpegImagePlugin</a>
  &#8226;   <a href="#ctypes.util">ctypes.util</a>
  &#8226;   <a href="#importlib.resources._common">importlib.resources._common</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
  &#8226;   <a href="#urllib.response">urllib.response</a>
 
@@ -12008,6 +12039,7 @@ imported by:
  &#8226;   <a href="#importlib.util">importlib.util</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#sysconfig">sysconfig</a>
  &#8226;   <a href="#zipfile">zipfile</a>
@@ -12040,6 +12072,7 @@ imported by:
  &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#license.license_manager">license.license_manager</a>
  &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#sqlite3.dbapi2">sqlite3.dbapi2</a>
  &#8226;   <a href="#ssl">ssl</a>
@@ -12167,8 +12200,9 @@ imports:
   <div class="import">
 imported by:
     <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
  &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
- &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
+ &#8226;   <a href="#modules.reports.report_ui">modules.reports.report_ui</a>
  &#8226;   <a href="#tkinter">tkinter</a>
 
   </div>
@@ -12250,8 +12284,6 @@ imports:
 imported by:
     <a href="#main_comercial.py">main_comercial.py</a>
  &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
- &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
- &#8226;   <a href="#modules.admin.license_ui">modules.admin.license_ui</a>
  &#8226;   <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
  &#8226;   <a href="#modules.customers.customer_ui">modules.customers.customer_ui</a>
  &#8226;   <a href="#modules.products.product_ui">modules.products.product_ui</a>
@@ -12328,7 +12360,6 @@ imported by:
  &#8226;   <a href="#http.cookiejar">http.cookiejar</a>
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#main_comercial.py">main_comercial.py</a>
- &#8226;   <a href="#modules.admin.first_run_wizard">modules.admin.first_run_wizard</a>
  &#8226;   <a href="#py_compile">py_compile</a>
  &#8226;   <a href="#threading">threading</a>
  &#8226;   <a href="#tkinter">tkinter</a>
@@ -12655,8 +12686,10 @@ imported by:
 <span class="moduletype">Package</span>  <div class="import">
 imported by:
     <a href="#utils.company_header">utils.company_header</a>
+ &#8226;   <a href="#utils.fecha_es">utils.fecha_es</a>
  &#8226;   <a href="#utils.formatters">utils.formatters</a>
  &#8226;   <a href="#utils.validators">utils.validators</a>
+ &#8226;   <a href="#utils.window_icon">utils.window_icon</a>
 
   </div>
 
@@ -12684,6 +12717,26 @@ imports:
   <div class="import">
 imported by:
     <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="utils.fecha_es"></a>
+  <a target="code" href="///C:/Users/NB/Desktop/post_system/utils/fecha_es.py" type="text/plain"><tt>utils.fecha_es</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#datetime">datetime</a>
+ &#8226;   <a href="#utils">utils</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
 
   </div>
 
@@ -12700,7 +12753,9 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
+    <a href="#main_comercial.py">main_comercial.py</a>
+ &#8226;   <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
+ &#8226;   <a href="#modules.customers.customer_ui">modules.customers.customer_ui</a>
  &#8226;   <a href="#modules.products.product_ui">modules.products.product_ui</a>
  &#8226;   <a href="#modules.reports.report_ui">modules.reports.report_ui</a>
  &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
@@ -12721,6 +12776,33 @@ imports:
 imported by:
     <a href="#modules.customers.customer_ui">modules.customers.customer_ui</a>
  &#8226;   <a href="#modules.products.product_ui">modules.products.product_ui</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="utils.window_icon"></a>
+  <a target="code" href="///C:/Users/NB/Desktop/post_system/utils/window_icon.py" type="text/plain"><tt>utils.window_icon</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#PIL">PIL</a>
+ &#8226;   <a href="#PIL.Image">PIL.Image</a>
+ &#8226;   <a href="#PIL.ImageTk">PIL.ImageTk</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#sys">sys</a>
+ &#8226;   <a href="#utils">utils</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#modules.admin.admin_ui">modules.admin.admin_ui</a>
+ &#8226;   <a href="#modules.admin.login_window">modules.admin.login_window</a>
+ &#8226;   <a href="#modules.credits.credit_ui">modules.credits.credit_ui</a>
+ &#8226;   <a href="#modules.customers.customer_ui">modules.customers.customer_ui</a>
+ &#8226;   <a href="#modules.products.product_ui">modules.products.product_ui</a>
+ &#8226;   <a href="#modules.reports.report_ui">modules.reports.report_ui</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
 
   </div>
 
@@ -12882,11 +12964,22 @@ imported by:
 </div>
 
 <div class="node">
+  <a name="win32print"></a>
+  <tt>win32print</tt> <span class="moduletype"><tt>C:\Users\NB\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\win32\win32print.pyd</tt></span>  <div class="import">
+imported by:
+    <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
+
+  </div>
+
+</div>
+
+<div class="node">
   <a name="winreg"></a>
   <tt>winreg</tt> <span class="moduletype"><i>(builtin module)</i></span>  <div class="import">
 imported by:
     <a href="#importlib._bootstrap_external">importlib._bootstrap_external</a>
  &#8226;   <a href="#mimetypes">mimetypes</a>
+ &#8226;   <a href="#modules.sales.sale_ui">modules.sales.sale_ui</a>
  &#8226;   <a href="#platform">platform</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
 

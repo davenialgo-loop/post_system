@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os, sys
 from datetime import datetime
+from utils.fecha_es import fecha_corta, fecha_larga
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
@@ -405,6 +406,9 @@ class POSApp:
 
         self._sidebar.pack_propagate(False)
 
+        # Footer PRIMERO (regla tkinter: side='bottom' antes que side='left')
+        self._build_footer()
+
         # Columna derecha (topbar + contenido)
         right = tk.Frame(self.root, bg=THEME["ct_bg"])
         right.pack(side='left', fill='both', expand=True)
@@ -412,6 +416,16 @@ class POSApp:
         self._build_sidebar()
         self._build_topbar(right)
         self._build_content_area(right)
+
+    # ── FOOTER ────────────────────────────────────────────────
+    def _build_footer(self):
+        """Barra inferior con datos de contacto de Venialgo Sistemas."""
+        footer = tk.Frame(self.root, bg="#0F172A", height=28)
+        footer.pack(fill='x', side='bottom')
+        footer.pack_propagate(False)
+        tk.Label(footer,
+                 text="  ✉ davenialgo@proton.me   │   📱 WhatsApp: +595 994-686 493   │   🌐 www.venialgosistemas.com  ",
+                 font=(FONT, 8), bg="#0F172A", fg="#FFFFFF").pack(side='left', pady=4)
 
     # ── SIDEBAR ───────────────────────────────────────────────
     def _build_sidebar(self):
@@ -567,8 +581,7 @@ class POSApp:
             bg=THEME["tb_bg"], fg=THEME["txt_primary"]).pack(side='right', pady=18)
 
     def _tick_clock(self):
-        now = datetime.now().strftime("%a %d %b  %H:%M:%S")
-        self._lbl_clock.config(text=now)
+        self._lbl_clock.config(text=fecha_corta())
         self._clock_job = self.root.after(1000, self._tick_clock)
 
     # ── ÁREA DE CONTENIDO ─────────────────────────────────────
@@ -632,7 +645,7 @@ class POSApp:
         # ── Bienvenida ────────────────────────────────────────
         greeting = tk.Frame(page, bg=THEME["ct_bg"])
         greeting.pack(fill='x', padx=28, pady=(24, 0))
-        hoy = datetime.now().strftime("%A, %d de %B de %Y").capitalize()
+        hoy = fecha_larga()
         tk.Label(greeting, text=f"Bienvenido, {self.current_user.get('nombre','')} 👋",
                  font=(FONT, 16, 'bold'),
                  bg=THEME["ct_bg"], fg=THEME["txt_primary"]).pack(anchor='w')

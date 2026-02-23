@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
+from utils.fecha_es import fecha_hora_ticket, fecha_iso
 from config.settings import COLORS, FONTS as _F, SPACING, BUTTON_STYLES, BUSINESS
 from utils.formatters import format_currency, generate_ticket
 try:
@@ -88,15 +89,30 @@ class SalesModule:
         srch_inner.pack(fill='x',padx=1,pady=1)
         tk.Label(srch_inner,text="🔍",bg=THEME["input_bg"],
                  font=(FONT,11),fg=THEME["txt_secondary"]).pack(side='left',padx=(10,4))
+        HINT_S = "Buscar por nombre, código o categoría..."
         self.search_var=tk.StringVar()
-        self.search_var.trace('w',lambda *_:self.search_products())
         srch_e=tk.Entry(srch_inner,textvariable=self.search_var,
-                        font=(FONT,11),bg=THEME["input_bg"],fg=THEME["txt_primary"],
+                        font=(FONT,11),bg=THEME["input_bg"],fg=THEME["txt_secondary"],
                         relief='flat',bd=0,insertbackground=THEME["acc_blue"])
+        srch_e.insert(0, HINT_S)
         srch_e.pack(fill='x',padx=4,pady=9)
-        srch_e.bind('<FocusIn>',lambda _:srch_outer.config(bg=THEME["input_foc"]))
-        srch_e.bind('<FocusOut>',lambda _:srch_outer.config(bg=THEME["input_brd"]))
-        srch_e.focus()
+        def _sin(e,h=HINT_S):
+            if srch_e.get()==h:
+                srch_e.delete(0,'end'); srch_e.config(fg=THEME["txt_primary"])
+            srch_outer.config(bg=THEME["input_foc"])
+        def _sout(e,h=HINT_S):
+            srch_outer.config(bg=THEME["input_brd"])
+            if not srch_e.get():
+                srch_e.insert(0,h); srch_e.config(fg=THEME["txt_secondary"])
+        srch_e.bind('<FocusIn>',  _sin)
+        srch_e.bind('<FocusOut>', _sout)
+        def _smart_srch(*_):
+            t = self.search_var.get()
+            if t == HINT_S: return
+            self.search_products()
+        self.search_var.trace('w', _smart_srch)
+        # Retrasar el foco para que no borre el placeholder al construir
+        srch_e.after(100, srch_e.focus)
 
         # Lista productos (cards)
         list_canvas=tk.Canvas(left,bg=THEME["card_bg"],highlightthickness=0)
@@ -191,9 +207,18 @@ class SalesModule:
         left.pack(side='left',fill='x',expand=True)
         name=p.get('name',p.get('nombre',''))
         price=p.get('price',p.get('precio',0))
-        tk.Label(left,text=name,font=(FONT,10,'bold'),
-                 bg=THEME["card_bg"],fg=THEME["txt_primary"],anchor='w').pack(anchor='w')
-        tk.Label(left,text=f"{format_currency(price)}  ·  Stock: {stock}",
+        codigo = p.get('barcode', p.get('codigo','')) or ''
+        cat    = p.get('category', p.get('categoria','')) or ''
+        name_row = tk.Frame(left, bg=THEME["card_bg"])
+        name_row.pack(fill='x', anchor='w')
+        tk.Label(name_row,text=name,font=(FONT,10,'bold'),
+                 bg=THEME["card_bg"],fg=THEME["txt_primary"],anchor='w').pack(side='left')
+        if codigo:
+            tk.Label(name_row,text=f"  [{codigo}]",font=(FONT,8),
+                     bg=THEME["card_bg"],fg=THEME["txt_secondary"],anchor='w').pack(side='left',pady=(1,0))
+        sub_parts = [format_currency(price), f"Stock: {stock}"]
+        if cat: sub_parts.append(cat)
+        tk.Label(left,text="  ·  ".join(sub_parts),
                  font=(FONT,9),bg=THEME["card_bg"],
                  fg=THEME["acc_green"] if stock>0 else THEME["acc_rose"]).pack(anchor='w',pady=(2,0))
         add=_btn(inner,"Agregar",lambda pr=p:self._add_product(pr),
@@ -220,9 +245,14 @@ class SalesModule:
         self._update_cart_display()
 
     def search_products(self):
-        t=self.search_var.get().lower()
-        f=[p for p in self.all_products if t in p.get('name','').lower()
-           or t in (p.get('barcode','') or '').lower()] if t else self.all_products
+        raw=self.search_var.get()
+        if raw.startswith("Buscar por"): return
+        t=raw.lower()
+        f=[p for p in self.all_products if
+           t in p.get('name',p.get('nombre','')).lower()
+           or t in (p.get('barcode',p.get('codigo','')) or '').lower()
+           or t in (p.get('category',p.get('categoria','')) or '').lower()
+           ] if t else self.all_products
         self._display_products(f)
 
     def remove_from_cart(self):
@@ -264,7 +294,7 @@ class SalesModule:
         dlg.configure(bg=THEME["ct_bg"])
         dlg.transient(self.parent)
         dlg.grab_set()
-        w,h=520,660
+        w,h=520,740
         dlg.update_idletasks()
         sw,sh=dlg.winfo_screenwidth(),dlg.winfo_screenheight()
         dlg.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
@@ -306,6 +336,47 @@ class SalesModule:
 
         # Frame contado
         cash_f=tk.Frame(options,bg=THEME["ct_bg"])
+
+        # ── Cliente (opcional) ────────────────────────────────
+        tk.Label(cash_f,text="Cliente",font=(FONT,10,'bold'),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,4))
+        customers_list=self.db.get_all_customers()
+        cust_names=["— Consumidor Final —"] + [
+            f"{c.get('name',c.get('nombre',''))} — {c.get('ruc','')}" if c.get('ruc')
+            else c.get('name',c.get('nombre',''))
+            for c in customers_list]
+        cust_ids=[0]+[c['id'] for c in customers_list]
+
+        cash_cust_var=tk.StringVar(value="— Consumidor Final —")
+        cust_cb=ttk.Combobox(cash_f,textvariable=cash_cust_var,
+            values=cust_names,font=(FONT,10),state='readonly')
+        cust_cb.pack(fill='x',pady=(0,6))
+
+        # Campo nombre libre (para cliente nuevo no registrado)
+        new_name_var=tk.StringVar()
+        new_name_row=tk.Frame(cash_f,bg=THEME["ct_bg"])
+        new_name_row.pack(fill='x',pady=(0,10))
+        tk.Label(new_name_row,text="  ó nombre libre:",font=(FONT,9),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(side='left',padx=(0,6))
+        n_outer=tk.Frame(new_name_row,bg=THEME["input_brd"])
+        n_outer.pack(side='left',fill='x',expand=True)
+        n_inner=tk.Frame(n_outer,bg=THEME["input_bg"])
+        n_inner.pack(fill='x',padx=1,pady=1)
+        new_name_e=tk.Entry(n_inner,textvariable=new_name_var,font=(FONT,10),
+                            bg=THEME["input_bg"],fg=THEME["txt_primary"],relief='flat',bd=0)
+        new_name_e.pack(fill='x',padx=8,ipady=5)
+        new_name_e.bind('<FocusIn>', lambda _: cust_cb.set("— Consumidor Final —"))
+
+        def _get_cash_cliente_name():
+            """Retorna el nombre del cliente para el ticket."""
+            libre = new_name_var.get().strip()
+            if libre: return libre
+            sel = cash_cust_var.get()
+            if sel == "— Consumidor Final —": return "Consumidor Final"
+            return sel.split(" — ")[0]  # solo el nombre sin RUC
+
+        tk.Frame(cash_f,bg=THEME["card_border"],height=1).pack(fill='x',pady=(0,10))
+
         tk.Label(cash_f,text="Método de Pago",font=(FONT,10,'bold'),
                  bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,4))
         pay_var=tk.StringVar(value="Efectivo")
@@ -392,9 +463,13 @@ class SalesModule:
                     paid=float(paid_e.get())
                     if paid<total:
                         messagebox.showerror("Error","Monto insuficiente",parent=dlg); return
+                    # Obtener cliente seleccionado
+                    _cliente_nombre = _get_cash_cliente_name()
+                    _sel_idx = cust_names.index(cash_cust_var.get()) if cash_cust_var.get() in cust_names else 0
+                    _cid = cust_ids[_sel_idx] if _sel_idx < len(cust_ids) else 0
                     items=[{'product_id':i['product_id'],'quantity':i['quantity'],
                             'unit_price':i['unit_price'],'subtotal':i['subtotal']} for i in self.cart]
-                    sid=self.db.create_sale(self.selected_customer_id,total,pay_var.get(),
+                    sid=self.db.create_sale(_cid,total,pay_var.get(),
                                             paid,paid-total,items,False)
                     # Guardar copia del carrito y datos ANTES de vaciarlo
                     _cart_copy = list(self.cart)
@@ -402,7 +477,7 @@ class SalesModule:
                     self.cart=[]; self._update_cart_display()
                     dlg.grab_release(); dlg.destroy()
                     # Mostrar ticket usando la copia del carrito
-                    self._show_ticket(_sid,_total,_method,_paid,_change,_cart_copy)
+                    self._show_ticket(_sid,_total,_method,_paid,_change,_cart_copy,_cliente_nombre)
                     messagebox.showinfo("✅ Venta registrada",f"Venta #{_sid} completada")
                     return
                 else:
@@ -417,7 +492,7 @@ class SalesModule:
                         messagebox.showerror("Error","Cuotas deben ser 1-24",parent=dlg); return
                     rem=total-down; inst_amt=rem/inst
                     freq_days=CREDIT['payment_frequencies'][freq_var.get()]['days']
-                    first_date=(datetime.now()+timedelta(days=freq_days)).strftime('%Y-%m-%d')
+                    first_date=fecha_iso(datetime.now()+timedelta(days=freq_days))
                     items=[{'product_id':i['product_id'],'quantity':i['quantity'],
                             'unit_price':i['unit_price'],'subtotal':i['subtotal']} for i in self.cart]
                     sid=self.db.create_sale(cid,total,"Crédito",down,0,items,True)
@@ -435,7 +510,7 @@ class SalesModule:
         _btn(btn_bar,"CONFIRMAR",finalize,THEME["acc_green"],"☑").pack(side='left',padx=(0,8))
         _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
 
-    def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None):
+    def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None,cliente_nombre='Consumidor Final'):
         tw=tk.Toplevel(self.parent)
         _set_icon(tw)
         tw.title("Ticket #"+str(sale_id))
@@ -467,7 +542,7 @@ class SalesModule:
         W        = 44
         SEP      = '-' * W
         SEP2     = '=' * W
-        now      = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        now      = fecha_hora_ticket()
 
         # Columnas: Producto 18 | Cant 4 | Precio 11 | Sub 11 = 44
         COL_PROD = 18
@@ -502,6 +577,10 @@ class SalesModule:
         lines.append(("TICKET DE VENTA #" + str(sale_id)).center(W))
         lines.append(("Fecha: " + now).center(W))
         lines.append(("Metodo: " + method).center(W))
+        if cliente_nombre and cliente_nombre != "Consumidor Final":
+            lines.append(("Cliente: " + cliente_nombre[:W-9]).center(W))
+        else:
+            lines.append("Consumidor Final".center(W))
         lines.append(SEP)
 
         # Cabecera columnas con separador visual

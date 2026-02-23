@@ -83,13 +83,38 @@ class ProductModule:
         srch_inner=tk.Frame(srch_outer,bg=THEME["input_bg"]); srch_inner.pack(fill='x',padx=1,pady=1)
         tk.Label(srch_inner,text="🔍",bg=THEME["input_bg"],fg=THEME["txt_secondary"],
                  font=(FONT,11)).pack(side='left',padx=(10,4))
+        HINT_P = "Buscar por nombre, código o categoría..."
         self.search_var=tk.StringVar()
-        self.search_var.trace('w',lambda *_:self.search_products())
         srch_e=tk.Entry(srch_inner,textvariable=self.search_var,font=(FONT,11),
-                        bg=THEME["input_bg"],fg=THEME["txt_primary"],relief='flat',bd=0)
+                        bg=THEME["input_bg"],fg=THEME["txt_secondary"],relief='flat',bd=0)
+        srch_e.insert(0, HINT_P)
         srch_e.pack(fill='x',padx=4,pady=8,side='left',expand=True)
+        def _pin(e,h=HINT_P):
+            if srch_e.get()==h:
+                srch_e.delete(0,'end'); srch_e.config(fg=THEME["txt_primary"])
+            srch_outer.config(bg=THEME["input_foc"])
+        def _pout(e,h=HINT_P):
+            srch_outer.config(bg=THEME["input_brd"])
+            if not srch_e.get():
+                srch_e.insert(0,h); srch_e.config(fg=THEME["txt_secondary"])
+        srch_e.bind('<FocusIn>',  _pin)
+        srch_e.bind('<FocusOut>', _pout)
+        def _smart_srch_p(*_):
+            t = self.search_var.get()
+            if t == HINT_P: return
+            self.search_products()
+        self.search_var.trace('w', _smart_srch_p)
         srch_outer.pack(side='left',fill='x',expand=True,padx=(0,12))
         _btn(tb,"Nuevo Producto",self.show_add_dialog,THEME["acc_blue"],"＋").pack(side='right')
+
+        # Stats row
+        stats=tk.Frame(self.parent,bg=bg,padx=24); stats.pack(fill='x',pady=(0,6))
+        self.lbl_total=tk.Label(stats,text="Total: 0 productos",font=(FONT,9),
+                                bg=bg,fg=THEME["txt_secondary"]); self.lbl_total.pack(side='left')
+        self.lbl_search_hint=tk.Label(stats,
+            text="  🔍 Busca por nombre, código o categoría",
+            font=(FONT,8),bg=bg,fg=THEME["txt_secondary"])
+        self.lbl_search_hint.pack(side='left',padx=(16,0))
 
         # Tabla
         tbl_outer=tk.Frame(self.parent,bg=THEME["card_border"])
@@ -128,8 +153,22 @@ class ProductModule:
                 p.get('barcode',p.get('codigo',''))))
         self.tree.tag_configure('odd',background=THEME["row_odd"])
         self.tree.tag_configure('even',background=THEME["row_even"])
+        if hasattr(self,'lbl_total'):
+            self.lbl_total.config(text=f"Total: {len(products)} producto{'s' if len(products)!=1 else ''}")
+        if hasattr(self,'lbl_search_hint'):
+            if search_term:
+                self.lbl_search_hint.config(
+                    text=f"  🔍 Filtrando por: '{search_term}'",
+                    fg=THEME["acc_blue"])
+            else:
+                self.lbl_search_hint.config(
+                    text="  🔍 Busca por nombre, código o categoría",
+                    fg=THEME["txt_secondary"])
 
-    def search_products(self): self.load_products(self.search_var.get())
+    def search_products(self):
+        term = self.search_var.get()
+        if term.startswith("Buscar por"): return
+        self.load_products(term)
 
     def _on_select(self,_=None):
         sel=self.tree.selection()
