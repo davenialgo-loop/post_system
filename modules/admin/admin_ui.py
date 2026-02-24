@@ -312,7 +312,8 @@ class AdminModule:
 
         act=tk.Frame(card,bg=THEME["card_bg"],padx=12,pady=10); act.pack(fill='x')
         _btn(act,"Editar",lambda:self._show_edit_user(),THEME["acc_amber"],"✏").pack(side='left',padx=(0,8))
-        _btn(act,"Activar/Desactivar",lambda:self._toggle_user(),THEME["btn_secondary"],"⏻").pack(side='left')
+        _btn(act,"Activar/Desactivar",lambda:self._toggle_user(),THEME["btn_secondary"],"⏻").pack(side='left',padx=(0,8))
+        _btn(act,"Eliminar",lambda:self._delete_user(),THEME["btn_danger"],"🗑").pack(side='left')
 
         self._load_users()
 
@@ -410,6 +411,24 @@ class AdminModule:
             self.db.toggle_user_active(uid)
             self._load_users()
         except Exception as e: messagebox.showerror("Error",str(e))
+
+    def _delete_user(self):
+        sel=self.user_tree.selection()
+        if not sel: return
+        vals=self.user_tree.item(sel[0])['values']
+        uid, uname = vals[0], vals[1]
+        if str(uname).lower() == 'admin':
+            messagebox.showerror("Error","No se puede eliminar el usuario admin principal.")
+            return
+        if not messagebox.askyesno("Confirmar eliminación",
+            f"¿Eliminar al usuario '{uname}'?\n\nEsta acción no se puede deshacer."):
+            return
+        try:
+            self.db.delete_user(uid)
+            self._load_users()
+            messagebox.showinfo("✅","Usuario eliminado correctamente.")
+        except Exception as e:
+            messagebox.showerror("Error",str(e))
 
     # ── TAB 3: PRECIOS ────────────────────────────────────────
     def _build_precios_tab(self):

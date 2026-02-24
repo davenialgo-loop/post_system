@@ -1113,3 +1113,78 @@ class DatabaseManager:
             conn.execute("UPDATE creditos SET proximo_pago=? WHERE id=?",
                         (new_date, credito_id))
             conn.commit()
+
+    # ── GESTIÓN DE USUARIOS ──────────────────────────────────────────────────
+
+    def get_all_users(self):
+        """Retorna todos los usuarios (activos e inactivos)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT id, nombre, usuario, rol, activo FROM usuarios ORDER BY nombre"
+            ).fetchall()
+        return [{"id": r[0], "nombre": r[1], "usuario": r[2],
+                 "rol": r[3], "activo": r[4]} for r in rows]
+
+    def get_user_by_id(self, uid):
+        """Retorna un usuario por su ID."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id, nombre, usuario, rol, activo FROM usuarios WHERE id=?", (uid,)
+            ).fetchone()
+        if row:
+            return {"id": row[0], "nombre": row[1], "usuario": row[2],
+                    "rol": row[3], "activo": row[4]}
+        return None
+
+    def add_user(self, nombre, usuario, password_hash, rol):
+        """Crea un nuevo usuario. Retorna el ID generado."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO usuarios (nombre, usuario, password, rol, activo) VALUES (?,?,?,?,1)",
+                (nombre, usuario, password_hash, rol)
+            )
+            conn.commit()
+            return cur.lastrowid
+
+    def update_user(self, uid, nombre, usuario, password_hash, rol):
+        """Actualiza datos de un usuario existente."""
+        with self._conn() as conn:
+            if password_hash:
+                conn.execute(
+                    "UPDATE usuarios SET nombre=?, usuario=?, password=?, rol=? WHERE id=?",
+                    (nombre, usuario, password_hash, rol, uid)
+                )
+            else:
+                conn.execute(
+                    "UPDATE usuarios SET nombre=?, usuario=?, rol=? WHERE id=?",
+                    (nombre, usuario, rol, uid)
+                )
+            conn.commit()
+
+    def toggle_user_active(self, uid):
+        """Activa o desactiva un usuario (no permite desactivar al admin principal)."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT usuario, activo FROM usuarios WHERE id=?", (uid,)
+            ).fetchone()
+            if not row:
+                return
+            if row[0] == 'admin':
+                raise ValueError("No se puede desactivar el usuario admin principal.")
+            new_state = 0 if row[1] else 1
+            conn.execute("UPDATE usuarios SET activo=? WHERE id=?", (new_state, uid))
+            conn.commit()
+        return new_state
+
+    def delete_user(self, uid):
+        """Elimina un usuario. No permite eliminar al admin principal."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT usuario FROM usuarios WHERE id=?", (uid,)
+            ).fetchone()
+            if not row:
+                raise ValueError("Usuario no encontrado.")
+            if row[0].lower() == 'admin':
+                raise ValueError("No se puede eliminar el usuario admin principal.")
+            conn.execute("DELETE FROM usuarios WHERE id=?", (uid,))
+            conn.commit()

@@ -63,7 +63,7 @@ def _center(win,w,h):
     win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
 class ProductModule:
-    def __init__(self,parent,db_manager):
+    def __init__(self,parent,db_manager,current_user=None):
         self.parent=parent; self.db=db_manager
         self.selected_product_id=None; _setup_styles()
         self._build(); self.load_products()
@@ -105,7 +105,8 @@ class ProductModule:
             self.search_products()
         self.search_var.trace('w', _smart_srch_p)
         srch_outer.pack(side='left',fill='x',expand=True,padx=(0,12))
-        _btn(tb,"Nuevo Producto",self.show_add_dialog,THEME["acc_blue"],"＋").pack(side='right')
+        if not self._is_cajero:
+            _btn(tb,"Nuevo Producto",self.show_add_dialog,THEME["acc_blue"],"＋").pack(side='right')
 
         # Stats row
         stats=tk.Frame(self.parent,bg=bg,padx=24); stats.pack(fill='x',pady=(0,6))
