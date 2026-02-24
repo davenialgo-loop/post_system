@@ -60,9 +60,9 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 ; ================================================================
 [Tasks]
-Name: "desktopicon";   Description: "Crear icono en el Escritorio";       GroupDescription: "Iconos adicionales:"; Flags: checked
-Name: "startmenuicon"; Description: "Crear acceso en Menu Inicio";        GroupDescription: "Iconos adicionales:"; Flags: checked
-Name: "startuprun";    Description: "Iniciar automaticamente con Windows"; GroupDescription: "Inicio automatico:";  Flags: unchecked
+Name: "desktopicon";   Description: "Crear icono en el Escritorio";       GroupDescription: "Iconos adicionales:"
+Name: "startmenuicon"; Description: "Crear acceso en Menu Inicio";        GroupDescription: "Iconos adicionales:"
+Name: "startuprun";    Description: "Iniciar automaticamente con Windows"; GroupDescription: "Inicio automatico:"; Flags: unchecked
 
 ; ================================================================
 [Files]
@@ -130,14 +130,10 @@ procedure InitializeWizard;
 begin
   WizardForm.WelcomeLabel2.Caption :=
     'Este asistente instalara ' + ExpandConstant('{#AppName}') +
-    ' v' + ExpandConstant('{#AppVersion}') + ' en su equipo.' +
-    #13#10 + #13#10 +
-    'Desarrollado por: ' + ExpandConstant('{#AppPublisher}') +
-    #13#10 +
-    'Email:     ' + ExpandConstant('{#AppContact}') +
-    #13#10 +
-    'WhatsApp:  ' + ExpandConstant('{#AppWhatsApp}') +
-    #13#10 + #13#10 +
+    ' v' + ExpandConstant('{#AppVersion}') + ' en su equipo.' + #13#10 + #13#10 +
+    'Desarrollado por: ' + ExpandConstant('{#AppPublisher}') + #13#10 +
+    'Email:     ' + ExpandConstant('{#AppContact}') + #13#10 +
+    'WhatsApp:  ' + ExpandConstant('{#AppWhatsApp}') + #13#10 + #13#10 +
     'Cierre todas las demas aplicaciones antes de continuar.';
 end;
 

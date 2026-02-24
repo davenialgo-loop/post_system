@@ -1,0 +1,132 @@
+================================================================================
+         CONTRATO DE LICENCIA DE USO DE SOFTWARE
+         Venialgo POS v1.1
+         Venialgo Sistemas
+================================================================================
+
+IMPORTANTE: LEA ESTE CONTRATO DETENIDAMENTE ANTES DE INSTALAR O UTILIZAR EL
+SOFTWARE. AL HACER CLIC EN "ACEPTO" O AL INSTALAR EL SOFTWARE, USTED ACEPTA
+QUEDAR VINCULADO POR LOS TERMINOS Y CONDICIONES DE ESTE CONTRATO.
+
+--------------------------------------------------------------------------------
+1. PARTES DEL CONTRATO
+--------------------------------------------------------------------------------
+
+LICENCIANTE: Venialgo Sistemas
+Contacto:    davenialgo@proton.me
+WhatsApp:    +595 994-686 493
+Web:         www.venialgosistemas.com
+
+LICENCIATARIO: La persona fisica o juridica que instala y utiliza el software.
+
+--------------------------------------------------------------------------------
+2. OBJETO DEL CONTRATO
+--------------------------------------------------------------------------------
+
+El presente contrato regula el uso del software "Venialgo POS", sistema de
+Punto de Venta desarrollado por Venialgo Sistemas, incluyendo todos sus modulos,
+actualizaciones, documentacion y archivos relacionados.
+
+--------------------------------------------------------------------------------
+3. LICENCIA DE USO
+--------------------------------------------------------------------------------
+
+Venialgo Sistemas otorga al Licenciatario una licencia personal, intransferible
+y no exclusiva para:
+
+a) Instalar y utilizar el software en UN (1) equipo informatico.
+b) Realizar copias de seguridad del software unicamente para uso personal.
+
+Queda expresamente PROHIBIDO:
+
+a) Copiar, distribuir, vender o sublicenciar el software a terceros.
+b) Modificar, descompilar, desensamblar o realizar ingenieria inversa del software.
+c) Eliminar o alterar los avisos de derechos de autor o marcas del software.
+d) Utilizar el software en mas equipos de los autorizados sin licencia adicional.
+e) Transferir la licencia a otra persona sin autorizacion escrita del Licenciante.
+
+--------------------------------------------------------------------------------
+4. PROPIEDAD INTELECTUAL
+--------------------------------------------------------------------------------
+
+El software, incluyendo su codigo fuente, diseno, logotipos, documentacion y
+todos los elementos que lo componen, son propiedad exclusiva de Venialgo Sistemas
+y estan protegidos por las leyes de propiedad intelectual vigentes.
+
+Esta licencia no transfiere ningun derecho de propiedad al Licenciatario.
+
+--------------------------------------------------------------------------------
+5. ACTUALIZACIONES Y SOPORTE
+--------------------------------------------------------------------------------
+
+a) Las actualizaciones del software podran ser proporcionadas a criterio del
+   Licenciante y podran estar sujetas a terminos adicionales.
+b) El soporte tecnico se brinda a traves de los canales oficiales indicados
+   en este contrato.
+c) Venialgo Sistemas se reserva el derecho de modificar, suspender o discontinuar
+   el software o el soporte en cualquier momento.
+
+--------------------------------------------------------------------------------
+6. GARANTIAS Y LIMITACION DE RESPONSABILIDAD
+--------------------------------------------------------------------------------
+
+EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTIAS DE NINGUN TIPO, EXPRESAS
+O IMPLICITAS. VENIALGO SISTEMAS NO GARANTIZA QUE EL SOFTWARE SERA LIBRE DE
+ERRORES O QUE FUNCIONARA SIN INTERRUPCIONES.
+
+EN NINGUN CASO VENIALGO SISTEMAS SERA RESPONSABLE POR DANOS DIRECTOS, INDIRECTOS,
+INCIDENTALES, ESPECIALES O CONSECUENTES QUE RESULTEN DEL USO O LA IMPOSIBILIDAD
+DE USO DEL SOFTWARE, INCLUYENDO PERO NO LIMITADO A: PERDIDA DE DATOS, PERDIDA DE
+BENEFICIOS O INTERRUPCION DEL NEGOCIO.
+
+La responsabilidad maxima del Licenciante no excedera el monto pagado por el
+Licenciatario por la licencia del software.
+
+--------------------------------------------------------------------------------
+7. DATOS Y PRIVACIDAD
+--------------------------------------------------------------------------------
+
+a) Toda la informacion comercial ingresada en el sistema (clientes, productos,
+   ventas, etc.) es propiedad exclusiva del Licenciatario.
+b) Venialgo Sistemas no accede, almacena ni comparte los datos del negocio
+   del Licenciatario.
+c) El Licenciatario es responsable de realizar copias de seguridad de sus datos.
+
+--------------------------------------------------------------------------------
+8. TERMINACION
+--------------------------------------------------------------------------------
+
+Esta licencia es vigente hasta su terminacion. Se terminara automaticamente si:
+
+a) El Licenciatario incumple cualquier termino de este contrato.
+b) El Licenciatario no renueva la licencia al vencer el periodo contratado.
+
+Al terminar la licencia, el Licenciatario debe dejar de utilizar el software y
+eliminar todas las copias instaladas.
+
+--------------------------------------------------------------------------------
+9. LEY APLICABLE
+--------------------------------------------------------------------------------
+
+Este contrato se rige por las leyes de la Republica del Paraguay. Cualquier
+disputa sera sometida a la jurisdiccion de los tribunales competentes de
+Asuncion, Paraguay.
+
+--------------------------------------------------------------------------------
+10. CONTACTO
+--------------------------------------------------------------------------------
+
+Para consultas sobre este contrato, soporte tecnico o adquisicion de licencias
+adicionales, contactese con:
+
+   Venialgo Sistemas
+   Email:    davenialgo@proton.me
+   WhatsApp: +595 994-686 493
+   Web:      www.venialgosistemas.com
+
+--------------------------------------------------------------------------------
+Al instalar este software, el Licenciatario declara haber leido, comprendido
+y aceptado todos los terminos y condiciones de este contrato.
+
+Venialgo Sistemas - Todos los derechos reservados - 2025
+================================================================================

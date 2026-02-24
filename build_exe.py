@@ -30,11 +30,27 @@ DATAS = [
 
 def linea(c="-", n=55): print(c * n)
 
+def _force_remove(func, path, excinfo):
+    """Maneja errores de permisos en Windows al borrar archivos."""
+    import stat
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
+
 def clean_build():
     for d in [DIST_DIR, BUILD_DIR]:
         if os.path.exists(d):
-            shutil.rmtree(d)
-            print(f"  [X] Eliminado: {d}/")
+            try:
+                shutil.rmtree(d, onerror=_force_remove)
+                print(f"  [X] Eliminado: {d}/")
+            except Exception as e:
+                print(f"  [!] No se pudo eliminar {d}/: {e}")
+                print(f"  [i] Cierre el .exe si está abierto y reintente.")
+                print(f"  [i] O elimine manualmente la carpeta '{d}' y vuelva a correr.")
+                input("\n  Presiona Enter para salir...")
+                sys.exit(1)
 
 def check_pyinstaller():
     try:
