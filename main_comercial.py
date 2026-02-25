@@ -423,6 +423,8 @@ class POSApp:
         self._setup_styles()
         self._build_layout()
         self._show_home()
+        # Verificar cuotas vencidas al iniciar (con delay para que la UI cargue)
+        self.root.after(1500, self._check_overdue_alert)
 
     # ── Ícono de ventana ─────────────────────────────────────
     def _set_window_icon(self, window):
@@ -631,7 +633,7 @@ class POSApp:
 
         # Botón cerrar sesión
         btn_lo = tk.Label(sb,
-            text="  ⏻   Cerrar Sesión",
+            text="  ✖  Cerrar Sesión",
             font=(FONT, 10, 'bold'),
             bg=THEME["btn_logout"], fg=THEME["txt_white"],
             cursor='hand2', pady=12, anchor='w', padx=12)
@@ -990,6 +992,91 @@ class POSApp:
                  wraplength=140, justify='left').pack(side='left')
 
     # ── CIERRE / LOGOUT ───────────────────────────────────────
+    def _check_overdue_alert(self):
+        """Muestra alerta si hay créditos con cuotas vencidas al iniciar el sistema."""
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime('%Y-%m-%d')
+            # Obtener créditos vencidos
+            credits = self.db.get_all_credits()
+            vencidos = []
+            for c in credits:
+                if c.get('status') == 'active':
+                    nxt = c.get('next_payment_date') or c.get('proximo_pago','')
+                    if nxt and nxt < today:
+                        nombre = c.get('customer_name') or c.get('cliente_nombre','Sin nombre')
+                        monto  = c.get('installment_amount') or c.get('monto_cuota', 0)
+                        vencidos.append((nombre, nxt, monto))
+            if not vencidos:
+                return
+            # Mostrar ventana de alerta
+            dlg = tk.Toplevel(self.root)
+            self._set_window_icon(dlg)
+            dlg.title("⚠ Cuotas Vencidas")
+            dlg.resizable(False, False)
+            dlg.configure(bg="#FFFFFF")
+            dlg.transient(self.root)
+            dlg.grab_set()
+            w = 460; h = min(140 + len(vencidos)*34, 520)
+            dlg.update_idletasks()
+            sx = (dlg.winfo_screenwidth()  - w) // 2
+            sy = (dlg.winfo_screenheight() - h) // 2
+            dlg.geometry(f"{w}x{h}+{sx}+{sy}")
+            # Header rojo
+            hdr = tk.Frame(dlg, bg="#B91C1C", pady=12)
+            hdr.pack(fill='x')
+            tk.Label(hdr, text="⚠  Cuotas Vencidas",
+                     font=(FONT,13,'bold'), bg="#B91C1C", fg="#FFFFFF").pack(anchor='w', padx=16)
+            tk.Label(hdr, text=f"Hay {len(vencidos)} crédito(s) con cuotas pendientes de cobro",
+                     font=(FONT,9), bg="#B91C1C", fg="#FFCDD2").pack(anchor='w', padx=16)
+            # Lista
+            from utils.formatters import format_currency
+            list_frame = tk.Frame(dlg, bg="#FFFFFF", padx=16, pady=8)
+            list_frame.pack(fill='both', expand=True)
+            # Encabezado tabla
+            hdr_row = tk.Frame(list_frame, bg="#FEF2F2")
+            hdr_row.pack(fill='x', pady=(0,2))
+            for txt, w_ in [("Cliente",200),("Vencimiento",110),("Cuota",110)]:
+                tk.Label(hdr_row, text=txt, font=(FONT,9,'bold'),
+                         bg="#FEF2F2", fg="#7F1D1D", width=w_//8, anchor='w').pack(side='left', padx=4, pady=4)
+            tk.Frame(list_frame, bg="#FECACA", height=1).pack(fill='x')
+            # Filas
+            canvas = tk.Canvas(list_frame, bg="#FFFFFF", highlightthickness=0)
+            scrollbar = tk.Scrollbar(list_frame, orient='vertical', command=canvas.yview)
+            scroll_frame = tk.Frame(canvas, bg="#FFFFFF")
+            scroll_frame.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+            canvas.create_window((0,0), window=scroll_frame, anchor='nw')
+            canvas.configure(yscrollcommand=scrollbar.set)
+            max_visible = min(len(vencidos), 8)
+            canvas.pack(side='left', fill='both', expand=True)
+            if len(vencidos) > 8: scrollbar.pack(side='right', fill='y')
+            for i, (nombre, fecha, monto) in enumerate(vencidos):
+                row_bg = "#FFF1F2" if i%2==0 else "#FFFFFF"
+                row = tk.Frame(scroll_frame, bg=row_bg)
+                row.pack(fill='x')
+                tk.Label(row, text=nombre[:28], font=(FONT,9), bg=row_bg,
+                         fg="#1F2937", anchor='w', width=25).pack(side='left', padx=4, pady=3)
+                tk.Label(row, text=fecha, font=(FONT,9), bg=row_bg,
+                         fg="#DC2626", anchor='w', width=13).pack(side='left', padx=4)
+                tk.Label(row, text=format_currency(monto), font=(FONT,9,'bold'), bg=row_bg,
+                         fg="#059669", anchor='e', width=13).pack(side='left', padx=4)
+            # Botones
+            btn_row = tk.Frame(dlg, bg="#FFFFFF", pady=10)
+            btn_row.pack(fill='x', padx=16)
+            def _ir_creditos():
+                dlg.grab_release(); dlg.destroy()
+                self._navigate('credits')
+            tk.Label(btn_row, text="  Ver Créditos  ", font=(FONT,10,'bold'),
+                     bg="#2563EB", fg="#FFFFFF", cursor='hand2', padx=12, pady=8).pack(side='left', padx=(0,8))
+            tk.Label(btn_row, text="  Cerrar  ", font=(FONT,10),
+                     bg="#6B7280", fg="#FFFFFF", cursor='hand2', padx=12, pady=8).pack(side='left')
+            # Bindings
+            btn_row.winfo_children()[0].bind('<ButtonRelease-1>', lambda e: _ir_creditos())
+            btn_row.winfo_children()[1].bind('<ButtonRelease-1>', lambda e: (dlg.grab_release(), dlg.destroy()))
+            dlg.bind('<Escape>', lambda e: (dlg.grab_release(), dlg.destroy()))
+        except Exception as ex:
+            print(f"[overdue alert] {ex}")
+
     def _on_close(self):
         if self._clock_job:
             self.root.after_cancel(self._clock_job)

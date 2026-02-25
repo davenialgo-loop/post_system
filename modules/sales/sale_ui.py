@@ -47,6 +47,8 @@ class SalesModule:
     def __init__(self, parent, db_manager):
         self.parent=parent; self.db=db_manager
         self.cart=[]; self.selected_customer_id=None
+        self._scanner_buffer = ""
+        self._scanner_last_time = 0
         _setup_tree_style()
         self._build()
         self.load_products()
@@ -113,6 +115,11 @@ class SalesModule:
         self.search_var.trace('w', _smart_srch)
         # Retrasar el foco para que no borre el placeholder al construir
         srch_e.after(100, srch_e.focus)
+        # ── Lector de código de barras ──────────────────────────
+        # Enter en el buscador = intento de scan
+        srch_e.bind('<Return>', self._on_barcode_enter)
+        # Captura global para lectores que no hacen foco en el Entry
+        self.parent.bind('<Key>', self._on_global_key)
 
         # Lista productos (cards)
         list_canvas=tk.Canvas(left,bg=THEME["card_bg"],highlightthickness=0)
@@ -244,6 +251,74 @@ class SalesModule:
             'max_stock':stock})
         self._update_cart_display()
 
+    # ── SOPORTE LECTOR DE CÓDIGO DE BARRAS ───────────────────────────────────
+
+    def _on_barcode_enter(self, event=None):
+        """Enter en el buscador: código exacto → agrega al carrito directamente."""
+        raw = self.search_var.get().strip()
+        if not raw or raw.startswith("Buscar por"): return "break"
+
+        # 1. Coincidencia exacta por código de barras
+        for p in self.all_products:
+            cod = (p.get('barcode', p.get('codigo', '')) or '').strip()
+            if cod and cod.lower() == raw.lower():
+                self._add_product(p)
+                self._flash_cart()
+                self.search_var.set("")
+                self.search_products()
+                return "break"
+
+        # 2. Una sola coincidencia por nombre o código parcial
+        results = [p for p in self.all_products
+                   if raw.lower() in p.get('name', p.get('nombre','')).lower()
+                   or raw.lower() in (p.get('barcode',p.get('codigo','')) or '').lower()]
+        if len(results) == 1:
+            self._add_product(results[0])
+            self._flash_cart()
+            self.search_var.set("")
+            self.search_products()
+        return "break"
+
+    def _on_global_key(self, event=None):
+        """Captura global para lectores de código de barras.
+        Los lectores envían caracteres muy rápido (<50ms entre teclas) + Enter al final.
+        Si el foco está en el Entry de búsqueda, deja que _on_barcode_enter lo maneje.
+        Si el foco está en otro widget, captura aquí.
+        """
+        import time
+        if not event: return
+        ch = event.char
+        if not ch or not ch.isprintable(): return
+        now = time.time()
+        dt = now - self._scanner_last_time
+        self._scanner_last_time = now
+        # Reset buffer si pasó más de 100ms (pausa humana, no scanner)
+        if dt > 0.1:
+            self._scanner_buffer = ""
+        self._scanner_buffer += ch
+
+        if event.keysym == 'Return' and self._scanner_buffer:
+            code = self._scanner_buffer.strip()
+            self._scanner_buffer = ""
+            if len(code) < 2: return
+            # Si el foco está en el buscador, ya lo maneja _on_barcode_enter
+            try:
+                focused = self.parent.focus_get()
+                if hasattr(focused, 'textvariable') or str(type(focused).__name__) == 'Entry':
+                    return  # lo maneja el Entry directamente
+            except Exception:
+                pass
+            # Buscar por código exacto y agregar al carrito
+            for p in self.all_products:
+                cod = (p.get('barcode', p.get('codigo', '')) or '').strip()
+                if cod and cod.lower() == code.lower():
+                    self._add_product(p)
+                    self._flash_cart()
+                    return
+            # No encontrado — mostrar en buscador para filtrar
+            self.search_var.set(code)
+            self.search_products()
+
     def search_products(self):
         raw=self.search_var.get()
         if raw.startswith("Buscar por"): return
@@ -254,6 +329,16 @@ class SalesModule:
            or t in (p.get('category',p.get('categoria','')) or '').lower()
            ] if t else self.all_products
         self._display_products(f)
+
+    def _flash_cart(self):
+        """Parpadeo verde en el carrito para confirmar que se agregó un producto."""
+        orig = THEME["card_bg"]
+        flash = "#D1FAE5"
+        try:
+            self.cart_tree.config(style='Flash.Treeview')
+            self.parent.after(200, lambda: self.cart_tree.config(style='POS.Treeview'))
+        except Exception:
+            pass
 
     def remove_from_cart(self):
         sel=self.cart_tree.selection()
@@ -727,8 +812,15 @@ class SalesModule:
         import sys, os, tempfile, subprocess
 
         # Preparar bytes del ticket (cp1252 para Windows, utf-8 para Linux)
-        encoding = 'cp1252' if sys.platform == 'win32' else 'utf-8'
-        raw_bytes = (txt + '\n\n\n\n').encode(encoding, errors='replace')
+        # cp850: compatible con impresoras térmicas y caracteres en español
+        # errors='replace' convierte caracteres no soportados en '?'
+        # Usamos 'replace' pero primero hacemos sustituciones manuales de problemáticos
+        safe_txt = (txt + '\n\n\n\n')
+        safe_txt = safe_txt.replace('₲', 'Gs.').replace('\u20b2', 'Gs.')
+        if sys.platform == 'win32':
+            raw_bytes = safe_txt.encode('cp850', errors='replace')
+        else:
+            raw_bytes = safe_txt.encode('utf-8', errors='replace')
 
         # ── MÉTODO 1: win32print — más directo y confiable ────
         if sys.platform == 'win32':

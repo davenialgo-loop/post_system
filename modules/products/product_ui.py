@@ -65,6 +65,9 @@ def _center(win,w,h):
 class ProductModule:
     def __init__(self,parent,db_manager,current_user=None):
         self.parent=parent; self.db=db_manager
+        self.current_user = current_user or {}
+        self._rol = self.current_user.get('rol','').lower()
+        self._is_cajero = self._rol == 'cajero'
         self.selected_product_id=None; _setup_styles()
         self._build(); self.load_products()
 
@@ -180,11 +183,42 @@ class ProductModule:
             self.selected_product_id=None
             self.btn_edit.disable(); self.btn_del.disable()
 
+    def _on_scan_code(self, event=None):
+        """Lector de código: busca producto, si no existe abre diálogo con código precargado."""
+        SCAN_HINT = "Escanear código..."
+        code = self._scan_var.get().strip()
+        if not code or code == SCAN_HINT: return
+        # Buscar producto por código exacto
+        p = self.db.get_product_by_code(code)
+        if p:
+            # Resaltar en la tabla
+            for item in self.tree.get_children():
+                vals = self.tree.item(item)['values']
+                if str(vals[0]) == str(p.get('id', p.get('product_id',''))):
+                    self.tree.selection_set(item)
+                    self.tree.see(item)
+                    self._on_select()
+                    break
+            self._scan_var.set("")
+            # Feedback: mostrar nombre brevemente en el campo
+            nombre = p.get('name', p.get('nombre',''))
+            self._scan_var.set(f"✔ {nombre[:25]}")
+            self.tree.after(1500, lambda: self._scan_var.set(""))
+        else:
+            # No existe: abrir diálogo de nuevo producto con código precargado
+            from tkinter import messagebox
+            if messagebox.askyesno("Producto no encontrado",
+                f"Código '{code}' no registrado.\n\n¿Crear nuevo producto con este código?"):
+                self._scan_var.set("")
+                self._show_dialog('add', barcode_preset=code)
+            else:
+                self._scan_var.set("")
+
     def show_add_dialog(self): self._show_dialog('add')
     def show_edit_dialog(self):
         if self.selected_product_id: self._show_dialog('edit',self.selected_product_id)
 
-    def _show_dialog(self,mode,product_id=None):
+    def _show_dialog(self,mode,product_id=None,barcode_preset=None):
         title="Nuevo Producto" if mode=='add' else "Editar Producto"
         dlg=tk.Toplevel(self.parent)
         _set_icon(dlg)
@@ -222,7 +256,7 @@ class ProductModule:
         lbl_entry('precio','Precio Contado')
         lbl_entry('stock','Stock Inicial')
         lbl_entry('categoria','Categoría')
-        lbl_entry('codigo','Código de Barras')
+        lbl_entry('codigo','Código de Barras  📷  (escanear con lector)')
 
         # Tabla de precios (calculada automáticamente)
         prices_card=tk.Frame(body,bg=THEME["card_border"]); prices_card.pack(fill='x',pady=(4,0))
@@ -271,7 +305,23 @@ class ProductModule:
                 fields['categoria'].insert(0,p.get('category',p.get('categoria','')))
                 fields['codigo'].insert(0,p.get('barcode',p.get('codigo','')))
                 update_prices()
-        fields['nombre'].focus()
+        # Precargar código si viene de scan
+        if barcode_preset:
+            fields['codigo'].delete(0,'end')
+            fields['codigo'].insert(0, barcode_preset)
+            fields['nombre'].focus()
+        else:
+            fields['nombre'].focus()
+
+        # Enter en campo código → saltar a nombre (lector termina con Enter)
+        def _scan_to_next(e):
+            if fields['codigo'].get().strip():
+                fields['nombre']._e.focus()
+            return "break"
+        try:
+            fields['codigo']._e.bind('<Return>', _scan_to_next)
+        except Exception:
+            pass
 
         def save():
             ok,msg,nombre=validate_required_field(fields['nombre'].get(),"Nombre")
