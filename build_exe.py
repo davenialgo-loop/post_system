@@ -21,6 +21,10 @@ HIDDEN_IMPORTS = [
     "tkinter", "tkinter.ttk", "tkinter.messagebox", "tkinter.filedialog",
     "sqlite3", "hashlib", "hmac", "uuid", "zipfile", "threading",
     "PIL", "PIL.Image", "PIL.ImageTk",
+    "openpyxl", "openpyxl.styles", "openpyxl.utils",
+    "reportlab", "reportlab.lib", "reportlab.lib.pagesizes",
+    "reportlab.lib.units", "reportlab.lib.styles", "reportlab.lib.colors",
+    "reportlab.platypus", "reportlab.pdfgen",
 ]
 
 DATAS = [

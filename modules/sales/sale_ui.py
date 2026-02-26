@@ -135,8 +135,11 @@ class SalesModule:
             list_canvas.configure(scrollregion=list_canvas.bbox('all'))
         list_canvas.bind('<Configure>',_resize)
         self.list_frame.bind('<Configure>',_scroll_region)
-        list_canvas.bind_all('<MouseWheel>',
-            lambda e:list_canvas.yview_scroll(-1*(e.delta//120),'units'))
+        def _mwheel_sale(e):
+            try: list_canvas.yview_scroll(-1*(e.delta//120), 'units')
+            except Exception: list_canvas.unbind_all('<MouseWheel>')
+        list_canvas.bind('<Enter>', lambda e: list_canvas.bind_all('<MouseWheel>', _mwheel_sale))
+        list_canvas.bind('<Leave>', lambda e: list_canvas.unbind_all('<MouseWheel>'))
         self._list_canvas=list_canvas
 
         # ── Panel derecho: carrito ────────────────────────────

@@ -137,11 +137,21 @@ class LoginWindow:
         self.root.bind('<Return>', lambda e: self._login())
 
     def _build_footer(self):
-        bar = tk.Frame(self.root, bg=DARK1, height=28)
+        bar = tk.Frame(self.root, bg="#0A1628", height=36)
         bar.pack(side='bottom', fill='x')
         bar.pack_propagate(False)
-        txt = f"  ✉ {FOOTER_INFO['email']}   │   📱 {FOOTER_INFO['whatsapp']}   │   🌐 {FOOTER_INFO['web']}  "
-        tk.Label(bar, text=txt, bg=DARK1, fg="#4A6080", font=(FONT, 8)).pack(side='left', pady=6)
+        inner = tk.Frame(bar, bg="#0A1628")
+        inner.place(relx=0.5, rely=0.5, anchor='center')
+        items = [
+            (f"✉  {FOOTER_INFO['email']}",  "#7EB8F7"),
+            ("│", "#2A4A6A"),
+            (f"📱  {FOOTER_INFO['whatsapp']}", "#7EB8F7"),
+            ("│", "#2A4A6A"),
+            (f"🌐  {FOOTER_INFO['web']}",    "#7EB8F7"),
+        ]
+        for txt, fg in items:
+            tk.Label(inner, text=txt, bg="#0A1628", fg=fg,
+                     font=(FONT, 7)).pack(side='left', padx=0)
 
     def _build_header(self):
         """Header azul oscuro degradado con logo y texto."""

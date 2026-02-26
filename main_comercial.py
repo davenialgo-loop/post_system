@@ -756,8 +756,11 @@ class POSApp:
             scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all'))
         scroll_canvas.bind('<Configure>', _on_resize)
         page.bind('<Configure>', _on_frame)
-        scroll_canvas.bind_all('<MouseWheel>',
-            lambda e: scroll_canvas.yview_scroll(-1*(e.delta//120), 'units'))
+        def _mwheel_home(e):
+            try: scroll_canvas.yview_scroll(-1*(e.delta//120), 'units')
+            except Exception: scroll_canvas.unbind_all('<MouseWheel>')
+        scroll_canvas.bind('<Enter>', lambda e: scroll_canvas.bind_all('<MouseWheel>', _mwheel_home))
+        scroll_canvas.bind('<Leave>', lambda e: scroll_canvas.unbind_all('<MouseWheel>'))
 
         pad = {"padx": 28, "pady": 0}
 
