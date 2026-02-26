@@ -807,46 +807,83 @@ class SalesModule:
         # Último recurso: primera impresora de la lista
         return printers[0] if printers else None
 
-    def _print_ticket(self, txt, printer_name=None):
-        """
-        Imprime el ticket directo a la impresora térmica.
-        Intenta 3 métodos en orden de confiabilidad.
-        """
-        import sys, os, tempfile, subprocess
+    # ── Comandos ESC/POS ─────────────────────────────────────────────────────
+    ESC_INIT     = b'\x1b\x40'          # Inicializar impresora
+    ESC_FEED3    = b'\x1b\x64\x03'     # Avanzar 3 líneas
+    GS_CUT_FULL  = b'\x1d\x56\x00'    # Corte total  (GS V 0)
+    GS_CUT_PART  = b'\x1d\x56\x01'    # Corte parcial (GS V 1) — más común
+    GS_CUT_FEED  = b'\x1d\x56\x42\x05' # Corte + avance 5mm (compatibilidad amplia)
 
-        # Preparar bytes del ticket (cp1252 para Windows, utf-8 para Linux)
-        # cp850: compatible con impresoras térmicas y caracteres en español
-        # errors='replace' convierte caracteres no soportados en '?'
-        # Usamos 'replace' pero primero hacemos sustituciones manuales de problemáticos
-        safe_txt = (txt + '\n\n\n\n')
-        safe_txt = safe_txt.replace('₲', 'Gs.').replace('\u20b2', 'Gs.')
-        if sys.platform == 'win32':
-            raw_bytes = safe_txt.encode('cp850', errors='replace')
+    def _supports_autocutter(self, printer_name):
+        """Detecta si la impresora tiene cortador automático.
+        Estrategia: nombres conocidos de térmicas + query de capacidades WMI.
+        """
+        if not printer_name:
+            return False
+        name_low = printer_name.lower()
+        # Marcas/modelos conocidos con cortador
+        CUTTER_KEYWORDS = [
+            'thermal','térmica','termica','receipt','ticket',
+            'pos','epson tm','epson t','citizen','star micro','star tsp',
+            'bixolon','sewoo','rongta','xprinter','xp-','80mm','58mm',
+            'tmt','tmu','tm-t','tm-u','tsp','rp80','rp58','rp-80',
+            'zj-80','zjiang','jp-58','jp-80','gainscha','gp-80','gp-58',
+        ]
+        if any(kw in name_low for kw in CUTTER_KEYWORDS):
+            return True
+        # Fallback: consulta WMI por DriverName
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['powershell','-NoProfile','-Command',
+                 f'(Get-WmiObject Win32_Printer | Where-Object {{$_.Name -eq "{printer_name}"}}).DriverName'],
+                capture_output=True, text=True, timeout=3)
+            driver = result.stdout.strip().lower()
+            if any(kw in driver for kw in CUTTER_KEYWORDS):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _build_escpos_bytes(self, txt, printer_name):
+        """Construye los bytes ESC/POS: init + texto + avance + corte (si aplica)."""
+        safe_txt = txt.replace('₲','Gs.').replace('\u20b2','Gs.')
+        import sys
+        text_bytes = safe_txt.encode('cp850', errors='replace') if sys.platform=='win32'                      else safe_txt.encode('utf-8', errors='replace')
+        data = self.ESC_INIT + text_bytes + self.ESC_FEED3
+        if self._supports_autocutter(printer_name):
+            data += self.GS_CUT_FEED   # corte + avance — más compatible entre marcas
         else:
-            raw_bytes = safe_txt.encode('utf-8', errors='replace')
+            data += b'\n\n\n'       # solo avance de papel si no hay cortador
+        return data
 
-        # ── MÉTODO 1: win32print — más directo y confiable ────
+    def _print_ticket(self, txt, printer_name=None):
+        """Imprime el ticket directo a la impresora térmica con soporte ESC/POS y corte."""
+        import sys, tempfile, subprocess
+
+        raw_bytes = self._build_escpos_bytes(txt, printer_name)
+
+        # ── MÉTODO 1: win32print RAW — más directo y confiable ─
         if sys.platform == 'win32':
             if self._print_win32(raw_bytes, printer_name):
                 return
 
-        # ── MÉTODO 2: PowerShell Out-Printer ──────────────────
+        # ── MÉTODO 2: PowerShell Out-Printer ───────────────────
         if sys.platform == 'win32':
             if self._print_powershell(txt, printer_name):
                 return
 
-        # ── MÉTODO 3: Notepad /p (siempre disponible en Win) ──
+        # ── MÉTODO 3: Notepad /p (siempre disponible en Win) ───
         if sys.platform == 'win32':
             if self._print_notepad(txt, printer_name):
                 return
 
-        # ── MÉTODO 4: lp (Linux/Mac) ──────────────────────────
+        # ── MÉTODO 4: lp (Linux/Mac) ───────────────────────────
         if sys.platform != 'win32':
             try:
-                with tempfile.NamedTemporaryFile(mode='wb', suffix='.txt',
-                                                 delete=False) as f:
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.bin', delete=False) as f:
                     f.write(raw_bytes); path=f.name
-                cmd = ['lp'] + (['-d', printer_name] if printer_name else []) + [path]
+                cmd = ['lp', '-o', 'raw'] + (['-d', printer_name] if printer_name else []) + [path]
                 subprocess.run(cmd, check=True)
                 messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
                 return
