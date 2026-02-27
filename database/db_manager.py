@@ -185,6 +185,22 @@ class DatabaseManager:
                 activo    INTEGER DEFAULT 1,
                 creado_en TEXT
             );
+            CREATE TABLE IF NOT EXISTS arqueos (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha_apertura  TEXT NOT NULL,
+                fecha_cierre    TEXT DEFAULT NULL,
+                monto_inicial   REAL DEFAULT 0,
+                monto_final     REAL DEFAULT NULL,
+                total_efectivo  REAL DEFAULT 0,
+                total_tarjeta   REAL DEFAULT 0,
+                total_transfer  REAL DEFAULT 0,
+                total_creditos  REAL DEFAULT 0,
+                total_ventas    INTEGER DEFAULT 0,
+                diferencia      REAL DEFAULT 0,
+                notas           TEXT DEFAULT '',
+                usuario_nombre  TEXT DEFAULT '',
+                estado          TEXT DEFAULT 'abierto'
+            );
             CREATE TABLE IF NOT EXISTS config_precios (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre     TEXT NOT NULL,
@@ -234,6 +250,7 @@ class DatabaseManager:
             ("creditos",  "cliente_nombre", "TEXT DEFAULT ''"),
             ("creditos",  "cuotas",    "INTEGER DEFAULT 1"),
             ("creditos",  "venta_id",  "INTEGER DEFAULT 0"),
+            ("ventas",    "nota",      "TEXT DEFAULT ''"),
         ]
         for tabla, columna, tipo in migrations:
             try:
@@ -408,10 +425,11 @@ class DatabaseManager:
 
         with self._conn() as conn:
             c = conn.cursor()
+            nota_val = kwargs.get('nota','') if not isinstance(customer_id_or_data, dict)                 else customer_id_or_data.get('nota','')
             c.execute("""INSERT INTO ventas
-                (fecha,cliente_id,cliente_nombre,total,descuento,metodo_pago,estado,cajero_id,cajero_nombre)
-                VALUES (?,?,?,?,?,?,?,?,?)""",
-                (fecha, cid, cname, total, chng, pmeth, 'completada', cajero_id, cajero_name))
+                (fecha,cliente_id,cliente_nombre,total,descuento,metodo_pago,estado,cajero_id,cajero_nombre,nota)
+                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (fecha, cid, cname, total, chng, pmeth, 'completada', cajero_id, cajero_name, nota_val))
             venta_id = c.lastrowid
 
             for item in items:
@@ -1124,6 +1142,83 @@ class DatabaseManager:
             ).fetchall()
         return [{"id": r[0], "nombre": r[1], "usuario": r[2],
                  "rol": r[3], "activo": r[4]} for r in rows]
+
+
+    # ════════════════════════════════════════════════════════
+    #  ARQUEOS DE CAJA
+    # ════════════════════════════════════════════════════════
+    def get_arqueo_abierto(self):
+        """Retorna el arqueo actualmente abierto, o None."""
+        conn = self._conn()
+        row = conn.execute(
+            "SELECT * FROM arqueos WHERE estado='abierto' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def abrir_arqueo(self, monto_inicial, usuario_nombre=''):
+        """Abre un nuevo arqueo de caja."""
+        from datetime import datetime
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO arqueos (fecha_apertura,monto_inicial,usuario_nombre,estado) VALUES (?,?,?,?)",
+                (fecha, monto_inicial, usuario_nombre, 'abierto'))
+        return self.get_arqueo_abierto()
+
+    def cerrar_arqueo(self, arqueo_id, monto_final, notas=''):
+        """Cierra el arqueo calculando totales de ventas del período."""
+        from datetime import datetime
+        conn0 = self._conn()
+        arq = conn0.execute("SELECT * FROM arqueos WHERE id=?", (arqueo_id,)).fetchone()
+        conn0.close()
+        if not arq:
+            return None
+        arq = dict(arq)
+        fecha_cierre = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        fecha_desde  = arq['fecha_apertura']
+        conn = self._conn()
+        def _sum(metodo):
+            r = conn.execute(
+                "SELECT COALESCE(SUM(total),0) FROM ventas WHERE fecha BETWEEN ? AND ? AND metodo_pago=?",
+                (fecha_desde, fecha_cierre, metodo)).fetchone()
+            return r[0] if r else 0
+        total_ef  = _sum('Efectivo')
+        total_tc  = _sum('Tarjeta Crédito') + _sum('Tarjeta Débito')
+        total_tr  = _sum('Transferencia')
+        r_cred = conn.execute(
+            "SELECT COALESCE(SUM(cuota_inicial),0) FROM creditos WHERE fecha BETWEEN ? AND ?",
+            (fecha_desde, fecha_cierre)).fetchone()
+        total_cred = r_cred[0] if r_cred else 0
+        r_count = conn.execute(
+            "SELECT COUNT(*) FROM ventas WHERE fecha BETWEEN ? AND ?",
+            (fecha_desde, fecha_cierre)).fetchone()
+        total_ventas = r_count[0] if r_count else 0
+        conn.close()
+        diferencia = monto_final - (arq['monto_inicial'] + total_ef)
+        with self._conn() as conn:
+            conn.execute(
+                """UPDATE arqueos SET fecha_cierre=?, monto_final=?, total_efectivo=?,
+                   total_tarjeta=?, total_transfer=?, total_creditos=?, total_ventas=?,
+                   diferencia=?, notas=?, estado='cerrado' WHERE id=?""",
+                (fecha_cierre, monto_final, total_ef, total_tc,
+                 total_tr, total_cred, total_ventas, diferencia, notas, arqueo_id))
+        return self.get_arqueo_by_id(arqueo_id)
+
+    def get_arqueo_by_id(self, arqueo_id):
+        """Retorna un arqueo por ID."""
+        conn = self._conn()
+        row = conn.execute("SELECT * FROM arqueos WHERE id=?", (arqueo_id,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def get_arqueos(self, limit=30):
+        """Historial de arqueos."""
+        conn = self._conn()
+        rows = conn.execute(
+            "SELECT * FROM arqueos ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
 
     def get_user_by_id(self, uid):
         """Retorna un usuario por su ID."""

@@ -397,6 +397,7 @@ class POSApp:
         ("📦", "Productos",     "products"),
         ("👥", "Clientes",      "customers"),
         ("📊", "Reportes",      "reports"),
+        ("🏦", "Arqueo de Caja","arqueo"),
         ("⚙️", "Configuración", "admin"),
     ]
 
@@ -606,6 +607,7 @@ class POSApp:
             "products": ["Administrador","Supervisor"],
             "customers":["Administrador","Supervisor","Cajero"],
             "reports":  ["Administrador","Supervisor","Cajero"],
+            "arqueo":   ["Administrador","Supervisor"],
             "admin":    ["Administrador"],
         }
 
@@ -733,6 +735,7 @@ class POSApp:
             "products": self._show_module_products,
             "customers":self._show_module_customers,
             "reports":  self._show_module_reports,
+            "arqueo":   self._show_module_arqueo,
             "admin":    self._show_module_admin,
         }
         dispatch.get(key, self._show_home)()
@@ -922,7 +925,18 @@ class POSApp:
             return {"count":"0","revenue":"Gs. 0","items":"0","credits":"0"}
 
     # ── MÓDULOS ───────────────────────────────────────────────
+    def _show_module_arqueo(self):
+        from modules.arqueo.arqueo_ui import ArqueoModule
+        ArqueoModule(self._content, self.db, current_user=self.current_user)
+
     def _show_module_sales(self):
+        # Verificar arqueo vencido antes de abrir ventas
+        try:
+            from modules.arqueo.arqueo_ui import check_arqueo_bloqueado
+            if check_arqueo_bloqueado(self.db, self.root):
+                return  # Bloqueado — muestra diálogo automáticamente
+        except Exception:
+            pass
         from modules.sales.sale_ui import SalesModule
         SalesModule(self._content, self.db)
 
@@ -940,7 +954,7 @@ class POSApp:
 
     def _show_module_reports(self):
         from modules.reports.report_ui import ReportsModule
-        ReportsModule(self._content, self.db)
+        ReportsModule(self._content, self.db, current_user=self.current_user)
 
     def _show_module_admin(self):
         from modules.admin.admin_ui import AdminModule

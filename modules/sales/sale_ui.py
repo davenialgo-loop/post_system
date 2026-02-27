@@ -472,6 +472,33 @@ class SalesModule:
             values=["Efectivo","Tarjeta Crédito","Tarjeta Débito","Transferencia"],
             state='readonly',font=(FONT,10))
         pay_cb.pack(fill='x',pady=(0,10))
+
+        # ── N° de operación (visible solo para tarjeta/transferencia) ──
+        ref_frame=tk.Frame(cash_f,bg=THEME["ct_bg"]); ref_frame.pack(fill='x',pady=(0,10))
+        ref_lbl=tk.Label(ref_frame,text="N° de Operación / Referencia",font=(FONT,10,'bold'),
+                 bg=THEME["ct_bg"],fg=THEME["txt_secondary"])
+        ref_outer=tk.Frame(ref_frame,bg=THEME["input_brd"])
+        ref_inner=tk.Frame(ref_outer,bg=THEME["input_bg"])
+        ref_inner.pack(fill='x',padx=1,pady=1)
+        ref_e=tk.Entry(ref_inner,font=(FONT,11),bg=THEME["input_bg"],
+                       fg=THEME["txt_primary"],relief='flat',bd=0,
+                       insertbackground=THEME["acc_blue"])
+        ref_e.pack(fill='x',padx=12,pady=8)
+        ref_hint=tk.Label(ref_frame,text="Ej: 123456789  (últimos dígitos del comprobante)",
+                  font=(FONT,8),bg=THEME["ct_bg"],fg=THEME["txt_secondary"])
+
+        def _toggle_ref(*_):
+            method=pay_var.get()
+            needs_ref = method in ("Tarjeta Crédito","Tarjeta Débito","Transferencia")
+            if needs_ref:
+                ref_lbl.pack(anchor='w',pady=(0,4))
+                ref_outer.pack(fill='x')
+                ref_hint.pack(anchor='w',pady=(2,0))
+            else:
+                ref_lbl.pack_forget(); ref_outer.pack_forget(); ref_hint.pack_forget()
+        pay_var.trace('w', _toggle_ref)
+        _toggle_ref()  # estado inicial
+
         tk.Label(cash_f,text="Monto Pagado",font=(FONT,10,'bold'),
                  bg=THEME["ct_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,4))
         paid_outer=tk.Frame(cash_f,bg=THEME["input_brd"])
@@ -557,15 +584,16 @@ class SalesModule:
                     _cid = cust_ids[_sel_idx] if _sel_idx < len(cust_ids) else 0
                     items=[{'product_id':i['product_id'],'quantity':i['quantity'],
                             'unit_price':i['unit_price'],'subtotal':i['subtotal']} for i in self.cart]
+                    _ref = ref_e.get().strip()
                     sid=self.db.create_sale(_cid,total,pay_var.get(),
-                                            paid,paid-total,items,False)
+                                            paid,paid-total,items,False,nota=_ref)
                     # Guardar copia del carrito y datos ANTES de vaciarlo
                     _cart_copy = list(self.cart)
-                    _sid,_total,_method,_paid,_change = sid,total,pay_var.get(),paid,paid-total
+                    _sid,_total,_method,_paid,_change,_ref_copy = sid,total,pay_var.get(),paid,paid-total,_ref
                     self.cart=[]; self._update_cart_display()
                     dlg.grab_release(); dlg.destroy()
                     # Mostrar ticket usando la copia del carrito
-                    self._show_ticket(_sid,_total,_method,_paid,_change,_cart_copy,_cliente_nombre)
+                    self._show_ticket(_sid,_total,_method,_paid,_change,_cart_copy,_cliente_nombre,_ref_copy)
                     messagebox.showinfo("✅ Venta registrada",f"Venta #{_sid} completada")
                     return
                 else:
@@ -598,7 +626,7 @@ class SalesModule:
         _btn(btn_bar,"CONFIRMAR",finalize,THEME["acc_green"],"☑").pack(side='left',padx=(0,8))
         _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
 
-    def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None,cliente_nombre='Consumidor Final'):
+    def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None,cliente_nombre='Consumidor Final',referencia=''):
         tw=tk.Toplevel(self.parent)
         _set_icon(tw)
         tw.title("Ticket #"+str(sale_id))
@@ -665,6 +693,8 @@ class SalesModule:
         lines.append(("TICKET DE VENTA #" + str(sale_id)).center(W))
         lines.append(("Fecha: " + now).center(W))
         lines.append(("Metodo: " + method).center(W))
+        if referencia:
+            lines.append(("Ref: " + referencia[:W-6]).center(W))
         if cliente_nombre and cliente_nombre != "Consumidor Final":
             lines.append(("Cliente: " + cliente_nombre[:W-9]).center(W))
         else:
@@ -693,6 +723,8 @@ class SalesModule:
         lines.append(fmt_total_row("Cambio:", max(0, chg)))
         lines.append(SEP2)
         lines.append("  Gracias por su compra!  ".center(W))
+        lines.append("")
+        lines.append("")
         lines.append(SEP)
         lines.append("Venialgo Sistemas POS".center(W))
         lines.append("davenialgo@proton.me".center(W))
