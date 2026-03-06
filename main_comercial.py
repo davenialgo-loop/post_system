@@ -238,6 +238,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)

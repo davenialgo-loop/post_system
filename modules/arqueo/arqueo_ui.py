@@ -85,6 +85,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)
@@ -239,8 +242,8 @@ class ArqueoModule:
         hist_hdr.pack(fill='x')
         tk.Label(hist_hdr, text="Historial de Arqueos", font=(FONT,11,'bold'),
                  bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(side='left')
-        btn_ref = _btn(hist_hdr, "↻", self._refresh, THEME["acc_blue"])
-        btn_ref.enable(); btn_ref.pack(side='right')
+        btn_ref = _btn(hist_hdr, "Actualizar", self._refresh, THEME["acc_blue"], "↻")
+        btn_ref.pack(side='right')
         tk.Frame(hist_inner, bg=THEME["card_border"], height=1).pack(fill='x')
 
         cols = ('ID','Apertura','Cierre','Ventas','Efectivo','Total Venta','Estado')
@@ -382,8 +385,8 @@ class ArqueoModule:
             self._refresh()
 
         monto_e.bind('<Return>', lambda e: abrir())
-        b1=_btn(btn_bar,"Abrir Caja",abrir,THEME["acc_green"],"🔓"); b1.enable(); b1.pack(side='left',padx=(0,8))
-        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.enable(); b2.pack(side='left')
+        b1=_btn(btn_bar,"Abrir Caja",abrir,THEME["acc_green"],"🔓"); b1.pack(side='left',padx=(0,4),fill='x',expand=True)
+        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.pack(side='left',fill='x',expand=True)
 
     def _cerrar_arqueo(self):
         """Diálogo para cerrar caja con resumen."""
@@ -497,8 +500,8 @@ class ArqueoModule:
             dlg.grab_release(); dlg.destroy()
             self._refresh()
 
-        b1=_btn(btn_bar,"Cerrar Caja",cerrar,THEME["btn_danger"],"🔒"); b1.enable(); b1.pack(side='left',padx=(0,8))
-        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.enable(); b2.pack(side='left')
+        b1=_btn(btn_bar,"Cerrar Caja",cerrar,THEME["btn_danger"],"🔒"); b1.pack(side='left',padx=(0,4),fill='x',expand=True)
+        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.pack(side='left',fill='x',expand=True)
 
     def _ver_detalle(self, _=None):
         """Muestra detalle de un arqueo del historial."""

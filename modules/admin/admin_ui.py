@@ -84,6 +84,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)
@@ -329,8 +332,8 @@ class AdminModule:
 
         btn_logo_row=tk.Frame(logo_right,bg=THEME["card_bg"])
         btn_logo_row.pack(anchor='w')
-        _btn(btn_logo_row,"Subir logo",_choose_logo,THEME["acc_blue"],"🖼").pack(side='left',padx=(0,8))
-        _btn(btn_logo_row,"Quitar",_remove_logo,THEME["btn_secondary"],"✕").pack(side='left')
+        _btn(btn_logo_row,"Subir logo",_choose_logo,THEME["acc_blue"],"🖼").pack(side='left',padx=(0,4),fill='x',expand=True)
+        _btn(btn_logo_row,"Quitar",_remove_logo,THEME["btn_secondary"],"✕").pack(side='left',fill='x',expand=True)
 
         # ── Separador ────────────────────────────────────────────
         tk.Frame(card,bg=THEME["card_border"],height=1).pack(fill='x',pady=(0,16))
@@ -523,8 +526,8 @@ class AdminModule:
                 self._load_users(); dlg.destroy()
             except Exception as e: messagebox.showerror("Error",str(e),parent=dlg)
 
-        _btn(btn_bar,"Guardar",save,THEME["acc_green"],"💾").pack(side='left',padx=(0,8))
-        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
+        _btn(btn_bar,"Guardar",save,THEME["acc_green"],"💾").pack(side='left',padx=(0,4),fill='x',expand=True)
+        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left',fill='x',expand=True)
 
     def _toggle_user(self):
         sel=self.user_tree.selection()

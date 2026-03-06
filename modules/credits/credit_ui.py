@@ -88,6 +88,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)
@@ -329,8 +332,8 @@ class CreditsModule:
             except Exception as ex:
                 lbl_status.config(text=f"❌  Error: {ex}",fg=THEME["acc_rose"])
 
-        b1=_btn(btn_bar,"Exportar",do_export,THEME["acc_purple"],"📥"); b1.enable(); b1.pack(side='left',padx=(0,8))
-        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.enable(); b2.pack(side='left')
+        b1=_btn(btn_bar,"Exportar",do_export,THEME["acc_purple"],"📥"); b1.pack(side='left',padx=(0,4),fill='x',expand=True)
+        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.pack(side='left',fill='x',expand=True)
 
     def _export_path(self, ext):
         """Devuelve ruta de exportación en Documentos del usuario."""
@@ -911,8 +914,8 @@ class CreditsModule:
             except ValueError: messagebox.showerror("Error","Ingrese un monto válido",parent=dlg)
             except Exception as e: messagebox.showerror("Error",str(e),parent=dlg)
 
-        b1=_btn(btn_bar,"Registrar Pago",register,THEME["acc_green"],"💰"); b1.enable(); b1.pack(side='left',padx=(0,8))
-        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.enable(); b2.pack(side='left')
+        b1=_btn(btn_bar,"Registrar Pago",register,THEME["acc_green"],"💰"); b1.pack(side='left',padx=(0,4),fill='x',expand=True)
+        b2=_btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.pack(side='left',fill='x',expand=True)
 
     def show_payment_history(self):
         if not self.selected_credit_id: return

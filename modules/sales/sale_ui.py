@@ -87,6 +87,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)
@@ -305,8 +308,8 @@ class SalesModule:
         # Botones carrito
         btn_row=tk.Frame(right,bg=THEME["card_bg"],padx=12,pady=6)
         btn_row.pack(fill='x')
-        _btn(btn_row,"Quitar",self.remove_from_cart,THEME["btn_danger"],"✕").pack(side='left',padx=(0,6))
-        _btn(btn_row,"Vaciar",self.clear_cart,THEME["btn_secondary"],"🗑").pack(side='left')
+        _btn(btn_row,"Quitar",self.remove_from_cart,THEME["btn_danger"],"✕").pack(side='left',padx=(0,4),fill='x',expand=True)
+        _btn(btn_row,"Vaciar",self.clear_cart,THEME["btn_secondary"],"🗑").pack(side='left',fill='x',expand=True)
 
         tk.Frame(right,bg=THEME["card_border"],height=1).pack(fill='x',padx=12)
 
@@ -745,8 +748,8 @@ class SalesModule:
             except Exception as e:
                 messagebox.showerror("Error",str(e),parent=dlg)
 
-        _btn(btn_bar,"CONFIRMAR",finalize,THEME["acc_green"],"☑").pack(side='left',padx=(0,8))
-        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
+        _btn(btn_bar,"CONFIRMAR",finalize,THEME["acc_green"],"☑", font_size=11).pack(side='left',padx=(0,4),fill='x',expand=True)
+        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left',fill='x',expand=True)
 
     def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None,cliente_nombre='Consumidor Final',referencia=''):
         tw=tk.Toplevel(self.parent)

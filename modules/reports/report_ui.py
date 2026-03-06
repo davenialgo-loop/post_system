@@ -166,6 +166,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)
@@ -376,7 +379,7 @@ class ReportsModule:
                                 bg=THEME["card_bg"],fg=THEME["txt_secondary"]); self.lbl_count.pack(side='left',padx=8)
         _btn(tbl_hdr,"PDF",self.export_pdf,THEME["acc_rose"],"📄").pack(side='right',padx=(4,0))
         _btn(tbl_hdr,"Excel",self.export_excel,THEME["acc_green"],"📊").pack(side='right',padx=(4,0))
-        _btn(tbl_hdr,"CSV",self.export_csv,THEME["acc_cyan"],"📥").pack(side='right')
+        _btn(tbl_hdr,"CSV",self.export_csv,THEME["acc_cyan"],"📥").pack(side='right',padx=(0,0))
         tk.Frame(tbl,bg=THEME["card_border"],height=1).pack(fill='x')
 
         cols=('ID','Fecha','Cliente','Total','Método','Usuario','Estado')
@@ -671,8 +674,8 @@ class ReportsModule:
         # Botón exportar + cerrar
         def _exp_role():
             self._export_role_report(by_user,d_from,d_to,filtro_txt)
-        b1=_btn(btn_bar,"Exportar Excel",_exp_role,THEME["acc_green"],"📊"); b1.pack(side='left',padx=(0,8))
-        b2=_btn(btn_bar,"Cerrar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.pack(side='left')
+        b1=_btn(btn_bar,"Exportar Excel",_exp_role,THEME["acc_green"],"📊"); b1.pack(side='left',padx=(0,4),fill='x',expand=True)
+        b2=_btn(btn_bar,"Cerrar",dlg.destroy,THEME["btn_secondary"],"✕"); b2.pack(side='left',fill='x',expand=True)
 
     def _export_role_report(self,by_user,d_from,d_to,filtro_txt):
         """Exporta el reporte por roles a Excel."""

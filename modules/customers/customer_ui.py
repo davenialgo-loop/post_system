@@ -83,6 +83,9 @@ class RoundedButton(tk.Canvas):
         import tkinter.font as _tf
         _f = _tf.Font(family=FONT, size=font_size, weight='bold')
         h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        # Auto minimum width from text measurement unless caller provides one
+        if 'width' not in kw:
+            kw['width'] = _f.measure(self._t) + 28
         super().__init__(parent, height=h, highlightthickness=0,
                          bd=0, bg=par_bg, cursor='arrow', **kw)
         self.bind('<Configure>',       self._on_cfg)
@@ -250,11 +253,11 @@ class CustomerModule:
 
         # Botones
         act=tk.Frame(self.parent,bg=bg,padx=24,pady=8); act.pack(fill='x')
-        self.btn_edit=_btn(act,"Editar",self.show_edit_dialog,THEME["acc_amber"],"✏")
+        self.btn_edit=_btn(act,"Editar",self.show_edit_dialog,THEME["acc_amber"],"✏", width=110)
         self.btn_edit.pack(side='left',padx=(0,8)); self.btn_edit.disable()
-        self.btn_del=_btn(act,"Eliminar",self.delete_customer,THEME["btn_danger"],"🗑")
+        self.btn_del=_btn(act,"Eliminar",self.delete_customer,THEME["btn_danger"],"🗑", width=110)
         self.btn_del.pack(side='left',padx=(0,8)); self.btn_del.disable()
-        self.btn_hist=_btn(act,"Ver Créditos",self.show_customer_credits,THEME["acc_purple"],"💳")
+        self.btn_hist=_btn(act,"Ver Créditos",self.show_customer_credits,THEME["acc_purple"],"💳", width=130)
         self.btn_hist.pack(side='left'); self.btn_hist.disable()
 
     def load_customers(self,search_term=''):
@@ -358,8 +361,8 @@ class CustomerModule:
                 self.load_customers(); dlg.destroy()
             except Exception as e: messagebox.showerror("Error",str(e),parent=dlg)
 
-        _btn(btn_bar,"Guardar",save,THEME["acc_green"],"💾").pack(side='left',padx=(0,8))
-        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left')
+        _btn(btn_bar,"Guardar",save,THEME["acc_green"],"💾").pack(side='left',padx=(0,4),fill='x',expand=True)
+        _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left',fill='x',expand=True)
 
     def delete_customer(self):
         if not self.selected_customer_id: return
