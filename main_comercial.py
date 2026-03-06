@@ -90,19 +90,14 @@ FONT_MONO= "Consolas"
 
 def make_card(parent, padx=20, pady=16, **kw):
     """Frame tipo card con fondo blanco y borde suave."""
-    outer = tk.Frame(parent, bg=THEME["card_border"])
-    outer.pack_propagate(True)
-    inner = tk.Frame(outer, bg=THEME["card_bg"],
-                     padx=padx, pady=pady, **kw)
-    inner.pack(fill='both', expand=True, padx=1, pady=1)
-    return outer, inner
+    outer = RoundedCard(parent, padx=padx, pady=pady)
+    return outer, outer.body
 
 
 def stat_card(parent, title, value, accent, icon=""):
     """Card de estadística con ícono, título y valor."""
-    outer = tk.Frame(parent, bg=THEME["card_border"])
-    inner = tk.Frame(outer, bg=THEME["card_bg"], padx=20, pady=18)
-    inner.pack(fill='both', expand=True, padx=1, pady=1)
+    outer = RoundedCard(parent, padx=20, pady=18)
+    inner = outer.body
 
     # Ícono + título en la misma fila
     top = tk.Frame(inner, bg=THEME["card_bg"])
@@ -177,9 +172,139 @@ class SidebarButton(tk.Frame):
                     w.destroy()
 
 
-# ══════════════════════════════════════════════════════════════
-#  FLUJO DE ARRANQUE
-# ══════════════════════════════════════════════════════════════
+
+# ── Rounded card widget ───────────────────────────────────────────────────
+def _draw_rr(c, x1, y1, x2, y2, r, fill, outline):
+    """Rounded rect on canvas; tag='rc'."""
+    kw = {'tags': 'rc'}
+    r = min(r, max(1,(x2-x1)//2), max(1,(y2-y1)//2))
+    c.create_rectangle(x1+r,y1,x2-r,y2, fill=fill,outline='',**kw)
+    c.create_rectangle(x1,y1+r,x2,y2-r, fill=fill,outline='',**kw)
+    for cx,cy,st in [(x1,y1,90),(x2-2*r,y1,0),(x1,y2-2*r,180),(x2-2*r,y2-2*r,270)]:
+        c.create_arc(cx,cy,cx+2*r,cy+2*r,start=st,extent=90,fill=fill,outline=fill,**kw)
+    c.create_line(x1+r,y1,x2-r,y1,fill=outline,**kw)
+    c.create_line(x1+r,y2,x2-r,y2,fill=outline,**kw)
+    c.create_line(x1,y1+r,x1,y2-r,fill=outline,**kw)
+    c.create_line(x2,y1+r,x2,y2-r,fill=outline,**kw)
+    for cx,cy,st in [(x1,y1,90),(x2-2*r,y1,0),(x1,y2-2*r,180),(x2-2*r,y2-2*r,270)]:
+        c.create_arc(cx,cy,cx+2*r,cy+2*r,start=st,extent=90,fill='',outline=outline,style='arc',**kw)
+
+class RoundedCard(tk.Canvas):
+    """Canvas card with rounded corners."""
+    def __init__(self, parent, radius=8, card_bg=None, border_color=None,
+                 padx=16, pady=12, fill_mode=False, **kw):
+        card_bg      = card_bg or THEME.get('card_bg','#FFFFFF')
+        border_color = border_color or THEME.get('card_border','#E5E7EB')
+        try: par_bg = parent.cget('bg')
+        except: par_bg = THEME.get('ct_bg','#F9FAFB')
+        super().__init__(parent, bg=par_bg, highlightthickness=0, bd=0, **kw)
+        self._r=radius; self._fill=card_bg; self._bc=border_color; self._fm=fill_mode
+        self._body=tk.Frame(self, bg=card_bg, padx=padx, pady=pady)
+        self._fid=self.create_window(radius, radius, anchor='nw', window=self._body)
+        self.bind('<Configure>', self._on_cv)
+        if not fill_mode:
+            self._body.bind('<Configure>', self._on_body)
+    @property
+    def body(self): return self._body
+    def _on_cv(self, e):
+        r=self._r; bw=max(1,e.width-2*r)
+        self.itemconfig(self._fid, width=bw)
+        if self._fm: self.itemconfig(self._fid, height=max(1,e.height-2*r))
+        self.delete('rc')
+        if e.width>3 and e.height>3:
+            _draw_rr(self,1,1,e.width-1,e.height-1,r,self._fill,self._bc)
+            self.tag_lower('rc')
+    def _on_body(self, e):
+        r=self._r; need_h=e.height+2*r
+        if abs(self.winfo_height()-need_h)>1: self.configure(height=need_h)
+
+
+# ── Rounded button widget ─────────────────────────────────────────────────
+class RoundedButton(tk.Canvas):
+    """Canvas button with rounded corners. Always draws correct color on resize."""
+    _R        = 6
+    _DISABLED = "#9CA3AF"
+
+    def __init__(self, parent, text, cmd, bg,
+                 icon="", font_size=10, btn_pady=9, **kw):
+        kw.pop('padx', None); kw.pop('pady', None)
+        self._t   = (f"{icon}  {text}") if icon else text
+        self._cmd = cmd
+        self._bg  = bg
+        self._fnt = (FONT, font_size, 'bold')
+        self._on  = False
+        try:    par_bg = parent.cget('bg')
+        except: par_bg = THEME.get('ct_bg','#F9FAFB')
+        import tkinter.font as _tf
+        _f = _tf.Font(family=FONT, size=font_size, weight='bold')
+        h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        super().__init__(parent, height=h, highlightthickness=0,
+                         bd=0, bg=par_bg, cursor='arrow', **kw)
+        self.bind('<Configure>',       self._on_cfg)
+        self.bind('<Enter>',           self._hover_in)
+        self.bind('<Leave>',           self._hover_out)
+        self.bind('<ButtonRelease-1>', self._click)
+
+    @staticmethod
+    def _dk(c):
+        r,g,b = int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
+        return "#{:02x}{:02x}{:02x}".format(
+            max(0,int(r*.82)),max(0,int(g*.82)),max(0,int(b*.82)))
+
+    def _draw(self, color=None):
+        if color is None:
+            color = self._bg if self._on else self._DISABLED
+        self.delete('all')
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 4 or h < 4:
+            return
+        r = min(self._R, w//2, h//2)
+        self.create_rectangle(r, 0, w-r, h,   fill=color, outline='')
+        self.create_rectangle(0, r, w,   h-r, fill=color, outline='')
+        for cx,cy,st in [(0,0,90),(w-2*r,0,0),(0,h-2*r,180),(w-2*r,h-2*r,270)]:
+            self.create_arc(cx,cy,cx+2*r,cy+2*r,
+                            start=st, extent=90, fill=color, outline=color)
+        self.create_text(w//2, h//2, text=self._t,
+                         font=self._fnt, fill='#ffffff', anchor='center')
+
+    def _on_cfg(self, e=None):
+        # Use event width when available (more reliable than winfo_width before mapping)
+        w = getattr(e, 'width', 0) or self.winfo_width()
+        if w > 4:
+            self._draw()
+        else:
+            self.after(30, self._draw)
+
+    def _hover_in(self, _=None):
+        if self._on: self._draw(self._dk(self._bg))
+    def _hover_out(self, _=None): self._draw()
+    def _click(self, _=None):
+        if self._on and self._cmd:
+            self._draw(self._dk(self._dk(self._bg)))
+            self.after(120, self._draw)
+            self._cmd()
+
+    def enable(self):
+        self._on = True
+        self.config(cursor='hand2')
+        self.after_idle(self._draw)
+
+    def disable(self):
+        self._on = False
+        self.config(cursor='arrow')
+        self.after_idle(self._draw)
+
+
+def _btn(parent, text, cmd, bg, icon="", font_size=10, btn_pady=9, **kw):
+    """Rounded button — always enabled."""
+    kw.pop('padx', None); kw.pop('pady', None)
+    b = RoundedButton(parent, text, cmd, bg, icon=icon,
+                      font_size=font_size, btn_pady=btn_pady, **kw)
+    b.enable()
+    return b
+
+
+
 
 class AppStarter:
     def __init__(self):
@@ -380,6 +505,7 @@ class AppStarter:
         POSApp(self.root, current_user=self.user_data)
 
 
+
 def startup_flow():
     AppStarter().start()
 
@@ -492,6 +618,9 @@ class POSApp:
 
     # ── Layout raíz: sidebar + main ───────────────────────────
     def _build_layout(self):
+        # Footer PRIMERO — regla tkinter: side='bottom' debe ir antes que side='left'
+        self._build_footer()
+
         # Columna izquierda (sidebar fija 220px) — con degradado
         SB_W = 220
         self._sb_canvas = tk.Canvas(self.root, width=SB_W, highlightthickness=0, bd=0)
@@ -525,9 +654,6 @@ class POSApp:
         self._sidebar.bind("<Configure>",   _update_height)
 
         self._sidebar.pack_propagate(False)
-
-        # Footer PRIMERO (regla tkinter: side='bottom' antes que side='left')
-        self._build_footer()
 
         # Columna derecha (topbar + contenido)
         right = tk.Frame(self.root, bg=THEME["ct_bg"])
@@ -634,15 +760,10 @@ class POSApp:
         self._lbl_backup.pack(anchor='w', pady=(0, 4))
 
         # Botón cerrar sesión
-        btn_lo = tk.Label(sb,
-            text="  ✖  Cerrar Sesión",
-            font=(FONT, 10, 'bold'),
-            bg=THEME["btn_logout"], fg=THEME["txt_white"],
-            cursor='hand2', pady=12, anchor='w', padx=12)
+        btn_lo = RoundedButton(sb, "Cerrar Sesión", self._logout,
+                               THEME["btn_logout"], icon="✖", btn_pady=11)
         btn_lo.pack(fill='x', padx=8, pady=(0, 12))
-        btn_lo.bind('<Enter>', lambda _: btn_lo.config(bg="#DC2626"))
-        btn_lo.bind('<Leave>', lambda _: btn_lo.config(bg=THEME["btn_logout"]))
-        btn_lo.bind('<Button-1>', lambda _: self._logout())
+        btn_lo.enable()
 
     # ── TOPBAR ────────────────────────────────────────────────
     def _build_topbar(self, parent):
@@ -769,7 +890,7 @@ class POSApp:
 
         # ── Bienvenida ────────────────────────────────────────
         greeting = tk.Frame(page, bg=THEME["ct_bg"])
-        greeting.pack(fill='x', padx=28, pady=(24, 0))
+        greeting.pack(fill='x', padx=28, pady=(16, 0))
         hoy = fecha_larga()
         tk.Label(greeting, text=f"Bienvenido, {self.current_user.get('nombre','')} 👋",
                  font=(FONT, 16, 'bold'),
@@ -780,7 +901,7 @@ class POSApp:
 
         # ── Línea separadora ─────────────────────────────────
         tk.Frame(page, bg=THEME["card_border"], height=1).pack(
-            fill='x', padx=28, pady=16)
+            fill='x', padx=28, pady=(12, 8))
 
         # ── Cards de estadísticas ─────────────────────────────
         tk.Label(page, text="Resumen del día",
@@ -806,21 +927,19 @@ class POSApp:
             card.grid(row=0, column=i, sticky='nsew', padx=4, pady=4)
             cards_row.columnconfigure(i, weight=1)
 
-        # ── Separador ─────────────────────────────────────────
-        tk.Frame(page, bg=THEME["card_border"], height=1).pack(
-            fill='x', padx=28, pady=(4, 16))
+
 
         # ── Tabla últimas ventas ──────────────────────────────
         bottom = tk.Frame(page, bg=THEME["ct_bg"])
         bottom.pack(fill='both', expand=True, padx=28, pady=(0, 28))
         bottom.columnconfigure(0, weight=3)
         bottom.columnconfigure(1, weight=2)
+        bottom.rowconfigure(0, weight=1)
 
         # Card tabla
-        tbl_outer = tk.Frame(bottom, bg=THEME["card_border"])
+        tbl_outer = RoundedCard(bottom, padx=0, pady=0, fill_mode=True)
         tbl_outer.grid(row=0, column=0, sticky='nsew', padx=(0,8))
-        tbl_inner = tk.Frame(tbl_outer, bg=THEME["card_bg"])
-        tbl_inner.pack(fill='both', expand=True, padx=1, pady=1)
+        tbl_inner = tbl_outer.body
 
         tk.Label(tbl_inner, text="Últimas ventas",
                  font=(FONT, 11, 'bold'),
@@ -863,10 +982,9 @@ class POSApp:
             tree.item(iid, tags=('odd' if i%2 else 'even',))
 
         # Card accesos rápidos
-        act_outer = tk.Frame(bottom, bg=THEME["card_border"])
+        act_outer = RoundedCard(bottom, padx=0, pady=0, fill_mode=True)
         act_outer.grid(row=0, column=1, sticky='nsew', padx=(8,0))
-        act_inner = tk.Frame(act_outer, bg=THEME["card_bg"])
-        act_inner.pack(fill='both', expand=True, padx=1, pady=1)
+        act_inner = act_outer.body
 
         tk.Label(act_inner, text="Accesos rápidos",
                  font=(FONT, 11, 'bold'),
@@ -889,16 +1007,14 @@ class POSApp:
             ("👥  Nuevo cliente",   THEME["acc_green"],  "customers"),
             ("📊  Ver reportes",    THEME["acc_cyan"],   "reports"),
         ]
-        for label, color, key in quick_actions:
-            if _rol not in _qa_perms.get(key, []): continue
-            btn = tk.Label(act_inner, text=label,
-                font=(FONT, 10), bg=color, fg="white",
-                cursor='hand2', padx=16, pady=10, anchor='w')
-            btn.pack(fill='x', padx=12, pady=4)
-            btn.bind('<Enter>', lambda e, b=btn, c=color:
-                b.config(bg=self._darken(c)))
-            btn.bind('<Leave>', lambda e, b=btn, c=color: b.config(bg=c))
-            btn.bind('<Button-1>', lambda e, k=key: self._navigate(k))
+        btns_qa = [(l,c,k) for l,c,k in quick_actions
+                   if _rol in _qa_perms.get(k,[])]
+        for i,(label,color,key) in enumerate(btns_qa):
+            is_last = (i == len(btns_qa)-1)
+            btn = RoundedButton(act_inner, label, lambda k=key: self._navigate(k),
+                                color, btn_pady=10, font_size=10)
+            btn.pack(fill='x', padx=12, pady=(4, 12 if is_last else 4))
+            btn.enable()
 
     def _darken(self, hex_color):
         """Oscurece un color hex un 15%."""

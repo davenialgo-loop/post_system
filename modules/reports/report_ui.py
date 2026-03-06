@@ -9,6 +9,88 @@ except ImportError:
     def _set_icon(w): pass
 
 
+# ── Gráfico de barras con Canvas (sin dependencias externas) ─────────────────
+class BarChart(tk.Canvas):
+    """Gráfico de barras con esquinas redondeadas en los tops. Sin dependencias."""
+    BAR_COLOR  = "#2563EB"
+    GRID_COLOR = "#F3F4F6"
+    LABEL_FG   = "#6B7280"
+
+    def __init__(self, parent, **kw):
+        kw.setdefault("bg", "#FFFFFF")
+        kw.setdefault("highlightthickness", 0)
+        kw.setdefault("height", 175)
+        super().__init__(parent, **kw)
+        self._data = []
+        self.bind("<Configure>", lambda e: self.after_idle(self._draw))
+
+    def set_data(self, data):
+        self._data = data
+        self.after_idle(self._draw)
+
+    def _rounded_bar(self, x0, y0, x1, y1, r=5):
+        r = min(r, max(1,(x1-x0)//2), max(1,(y1-y0)//2))
+        c = self.BAR_COLOR
+        # Body
+        self.create_rectangle(x0, y0+r, x1, y1, fill=c, outline='')
+        # Top flat rect (covers gap between arcs)
+        self.create_rectangle(x0+r, y0, x1-r, y0+r+1, fill=c, outline='')
+        # Two top arcs
+        self.create_arc(x0, y0, x0+2*r, y0+2*r,
+                        start=90, extent=90, fill=c, outline=c)
+        self.create_arc(x1-2*r, y0, x1, y0+2*r,
+                        start=0,  extent=90, fill=c, outline=c)
+
+    def _draw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 20 or h < 20:
+            return
+        if not self._data:
+            self.create_text(w//2, h//2, text="Sin datos para el período",
+                             fill=self.LABEL_FG, font=(FONT, 9))
+            return
+        pad_l, pad_r, pad_t, pad_b = 10, 10, 20, 34
+        n      = len(self._data)
+        vals   = [v for _, v in self._data]
+        max_v  = max(vals) if any(v > 0 for v in vals) else 1
+        cw     = w - pad_l - pad_r
+        ch     = h - pad_t - pad_b
+        gap    = max(3, min(8, cw // (n * 4))) if n > 1 else 0
+        bar_w  = max(6, int((cw - gap * (n - 1)) / n)) if n > 0 else cw
+        # Grid lines
+        for i in range(1, 4):
+            y = pad_t + ch * (1 - i / 3)
+            self.create_line(pad_l, y, w - pad_r, y,
+                             fill=self.GRID_COLOR, dash=(4, 3))
+        # Bars
+        for idx, (label, val) in enumerate(self._data):
+            x0 = pad_l + idx * (bar_w + gap)
+            x1 = x0 + bar_w
+            bh = int(ch * val / max_v) if max_v > 0 else 0
+            y0 = pad_t + ch - bh
+            y1 = pad_t + ch
+            if bh > 0:
+                if bh >= 10:
+                    self._rounded_bar(x0, y0, x1, y1, r=5)
+                else:
+                    self.create_rectangle(x0, y0, x1, y1,
+                                          fill=self.BAR_COLOR, outline='')
+            if val > 0:
+                try:
+                    from utils.formatters import format_currency
+                    lv = format_currency(val) if val >= 10000 else str(int(val))
+                except Exception:
+                    lv = str(int(val))
+                self.create_text((x0+x1)/2, y0-4, text=lv,
+                                 fill=self.LABEL_FG,
+                                 font=(FONT, 7, "bold"), anchor="s")
+            self.create_text((x0+x1)/2, y1+5, text=label,
+                             fill=self.LABEL_FG,
+                             font=(FONT, 7, "bold"), anchor="n")
+
+
 THEME={"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#111827",
     "txt_primary":"#111827","txt_secondary":"#6B7280","txt_white":"#FFFFFF",
     "acc_blue":"#2563EB","acc_green":"#059669","acc_amber":"#D97706","acc_rose":"#E11D48",
@@ -17,16 +99,142 @@ THEME={"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"#1
     "row_odd":"#F9FAFB","row_even":"#FFFFFF"}
 FONT="Segoe UI"
 
-def _btn(parent,text,cmd,bg,icon="",**kw):
-    t=f"{icon}  {text}" if icon else text
+# ── Rounded card widget ───────────────────────────────────────────────────
+def _draw_rr(c, x1, y1, x2, y2, r, fill, outline):
+    """Rounded rect on canvas; tag='rc'."""
+    kw = {'tags': 'rc'}
+    r = min(r, max(1,(x2-x1)//2), max(1,(y2-y1)//2))
+    c.create_rectangle(x1+r,y1,x2-r,y2, fill=fill,outline='',**kw)
+    c.create_rectangle(x1,y1+r,x2,y2-r, fill=fill,outline='',**kw)
+    for cx,cy,st in [(x1,y1,90),(x2-2*r,y1,0),(x1,y2-2*r,180),(x2-2*r,y2-2*r,270)]:
+        c.create_arc(cx,cy,cx+2*r,cy+2*r,start=st,extent=90,fill=fill,outline=fill,**kw)
+    c.create_line(x1+r,y1,x2-r,y1,fill=outline,**kw)
+    c.create_line(x1+r,y2,x2-r,y2,fill=outline,**kw)
+    c.create_line(x1,y1+r,x1,y2-r,fill=outline,**kw)
+    c.create_line(x2,y1+r,x2,y2-r,fill=outline,**kw)
+    for cx,cy,st in [(x1,y1,90),(x2-2*r,y1,0),(x1,y2-2*r,180),(x2-2*r,y2-2*r,270)]:
+        c.create_arc(cx,cy,cx+2*r,cy+2*r,start=st,extent=90,fill='',outline=outline,style='arc',**kw)
+
+class RoundedCard(tk.Canvas):
+    """Canvas card with rounded corners.
+    fill_mode=False → body height drives canvas height (for KPI/form cards).
+    fill_mode=True  → canvas height drives body height (for table/fill cards).
+    """
+    def __init__(self, parent, radius=8, card_bg=None, border_color=None,
+                 padx=16, pady=12, fill_mode=False, **kw):
+        card_bg      = card_bg or THEME.get('card_bg','#FFFFFF')
+        border_color = border_color or THEME.get('card_border','#E5E7EB')
+        try: par_bg = parent.cget('bg')
+        except: par_bg = THEME.get('ct_bg','#F9FAFB')
+        super().__init__(parent, bg=par_bg, highlightthickness=0, bd=0, **kw)
+        self._r=radius; self._fill=card_bg; self._bc=border_color; self._fm=fill_mode
+        self._body=tk.Frame(self, bg=card_bg, padx=padx, pady=pady)
+        self._fid=self.create_window(radius, radius, anchor='nw', window=self._body)
+        self.bind('<Configure>', self._on_cv)
+        if not fill_mode:
+            self._body.bind('<Configure>', self._on_body)
+    @property
+    def body(self): return self._body
+    def _on_cv(self, e):
+        r=self._r; bw=max(1,e.width-2*r)
+        self.itemconfig(self._fid, width=bw)
+        if self._fm: self.itemconfig(self._fid, height=max(1,e.height-2*r))
+        self.delete('rc')
+        if e.width>3 and e.height>3:
+            _draw_rr(self,1,1,e.width-1,e.height-1,r,self._fill,self._bc)
+            self.tag_lower('rc')
+    def _on_body(self, e):
+        r=self._r; need_h=e.height+2*r
+        if abs(self.winfo_height()-need_h)>1: self.configure(height=need_h)
+
+# ── Rounded button widget ─────────────────────────────────────────────────
+class RoundedButton(tk.Canvas):
+    """Canvas button with rounded corners. Always draws correct color on resize."""
+    _R        = 6
+    _DISABLED = "#9CA3AF"
+
+    def __init__(self, parent, text, cmd, bg,
+                 icon="", font_size=10, btn_pady=9, **kw):
+        kw.pop('padx', None); kw.pop('pady', None)
+        self._t   = (f"{icon}  {text}") if icon else text
+        self._cmd = cmd
+        self._bg  = bg
+        self._fnt = (FONT, font_size, 'bold')
+        self._on  = False
+        try:    par_bg = parent.cget('bg')
+        except: par_bg = THEME.get('ct_bg','#F9FAFB')
+        import tkinter.font as _tf
+        _f = _tf.Font(family=FONT, size=font_size, weight='bold')
+        h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        super().__init__(parent, height=h, highlightthickness=0,
+                         bd=0, bg=par_bg, cursor='arrow', **kw)
+        self.bind('<Configure>',       self._on_cfg)
+        self.bind('<Enter>',           self._hover_in)
+        self.bind('<Leave>',           self._hover_out)
+        self.bind('<ButtonRelease-1>', self._click)
+
+    @staticmethod
     def _dk(c):
-        r,g,b=int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
-        return f"#{max(0,int(r*.82)):02x}{max(0,int(g*.82)):02x}{max(0,int(b*.82)):02x}"
-    lbl=tk.Label(parent,text=t,font=(FONT,10,'bold'),bg=bg,fg="#fff",cursor='hand2',padx=14,pady=8,**kw)
-    lbl.bind('<Enter>',lambda _:lbl.config(bg=_dk(bg)))
-    lbl.bind('<Leave>',lambda _:lbl.config(bg=bg))
-    lbl.bind('<ButtonRelease-1>',lambda _:(lbl.config(bg=_dk(bg)),cmd()))
-    return lbl
+        r,g,b = int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
+        return "#{:02x}{:02x}{:02x}".format(
+            max(0,int(r*.82)),max(0,int(g*.82)),max(0,int(b*.82)))
+
+    def _draw(self, color=None):
+        if color is None:
+            color = self._bg if self._on else self._DISABLED
+        self.delete('all')
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 4 or h < 4:
+            return
+        r = min(self._R, w//2, h//2)
+        self.create_rectangle(r, 0, w-r, h,   fill=color, outline='')
+        self.create_rectangle(0, r, w,   h-r, fill=color, outline='')
+        for cx,cy,st in [(0,0,90),(w-2*r,0,0),(0,h-2*r,180),(w-2*r,h-2*r,270)]:
+            self.create_arc(cx,cy,cx+2*r,cy+2*r,
+                            start=st, extent=90, fill=color, outline=color)
+        self.create_text(w//2, h//2, text=self._t,
+                         font=self._fnt, fill='#ffffff', anchor='center')
+
+    def _on_cfg(self, e=None):
+        # Use event width when available (more reliable than winfo_width before mapping)
+        w = getattr(e, 'width', 0) or self.winfo_width()
+        if w > 4:
+            self._draw()
+        else:
+            self.after(30, self._draw)
+
+    def _hover_in(self, _=None):
+        if self._on: self._draw(self._dk(self._bg))
+    def _hover_out(self, _=None): self._draw()
+    def _click(self, _=None):
+        if self._on and self._cmd:
+            self._draw(self._dk(self._dk(self._bg)))
+            self.after(120, self._draw)
+            self._cmd()
+
+    def enable(self):
+        self._on = True
+        self.config(cursor='hand2')
+        self.after_idle(self._draw)
+
+    def disable(self):
+        self._on = False
+        self.config(cursor='arrow')
+        self.after_idle(self._draw)
+
+
+def _btn(parent, text, cmd, bg, icon="", font_size=10, btn_pady=9, **kw):
+    """Rounded button — always enabled."""
+    kw.pop('padx', None); kw.pop('pady', None)
+    b = RoundedButton(parent, text, cmd, bg, icon=icon,
+                      font_size=font_size, btn_pady=btn_pady, **kw)
+    b.enable()
+    return b
+
+
+
+
+
 
 def _setup_styles():
     s=ttk.Style()
@@ -53,9 +261,8 @@ class ReportsModule:
         self._quick_filter('today')
 
     def _stat_card(self,parent,title,value,accent,icon=""):
-        outer=tk.Frame(parent,bg=THEME["card_border"])
-        inner=tk.Frame(outer,bg=THEME["card_bg"],padx=16,pady=14)
-        inner.pack(fill='both',expand=True,padx=1,pady=1)
+        outer=RoundedCard(parent,padx=16,pady=14)
+        inner=outer.body
         tk.Label(inner,text=f"{icon}  {title}" if icon else title,
                  font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
         lbl=tk.Label(inner,text=value,font=(FONT,18,'bold'),bg=THEME["card_bg"],fg=accent)
@@ -73,10 +280,9 @@ class ReportsModule:
         tk.Frame(self.parent,bg=THEME["card_border"],height=1).pack(fill='x',padx=28,pady=(10,14))
 
         # Filtros rápidos
-        flt_card_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+        flt_card_outer=RoundedCard(self.parent,padx=16,pady=12)
         flt_card_outer.pack(fill='x',padx=24,pady=(0,14))
-        flt_card=tk.Frame(flt_card_outer,bg=THEME["card_bg"],padx=16,pady=12)
-        flt_card.pack(fill='x',padx=1,pady=1)
+        flt_card=flt_card_outer.body
         tk.Label(flt_card,text="Período:",font=(FONT,10,'bold'),
                  bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(side='left',padx=(0,12))
         for val,lbl in [('today','Hoy'),('week','Esta semana'),('month','Este mes'),('year','Este año')]:
@@ -105,10 +311,9 @@ class ReportsModule:
 
         # ── Sección Reporte por Rol (solo Administrador) ──────────
         if self._is_admin:
-            roles_card_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+            roles_card_outer=RoundedCard(self.parent,padx=16,pady=10)
             roles_card_outer.pack(fill='x',padx=24,pady=(0,14))
-            roles_card=tk.Frame(roles_card_outer,bg=THEME["card_bg"],padx=16,pady=10)
-            roles_card.pack(fill='x',padx=1,pady=1)
+            roles_card=roles_card_outer.body
             # Fila superior: título + selector
             roles_hdr=tk.Frame(roles_card,bg=THEME["card_bg"]); roles_hdr.pack(fill='x',pady=(0,8))
             tk.Label(roles_hdr,text="👤  Filtrar por Usuario / Rol:",font=(FONT,10,'bold'),
@@ -160,16 +365,18 @@ class ReportsModule:
             w.grid(row=0,column=i,sticky='nsew',padx=4); kpi_row.columnconfigure(i,weight=1)
 
         # Tabla ventas
-        tbl_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+        tbl_outer=RoundedCard(self.parent,padx=0,pady=0,fill_mode=True)
         tbl_outer.pack(fill='both',expand=True,padx=24,pady=(0,10))
-        tbl=tk.Frame(tbl_outer,bg=THEME["card_bg"]); tbl.pack(fill='both',expand=True,padx=1,pady=1)
+        tbl=tbl_outer.body
 
         tbl_hdr=tk.Frame(tbl,bg=THEME["card_bg"],padx=16,pady=10); tbl_hdr.pack(fill='x')
         tk.Label(tbl_hdr,text="Detalle de Ventas",font=(FONT,11,'bold'),
                  bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(side='left')
         self.lbl_count=tk.Label(tbl_hdr,text="",font=(FONT,9),
                                 bg=THEME["card_bg"],fg=THEME["txt_secondary"]); self.lbl_count.pack(side='left',padx=8)
-        _btn(tbl_hdr,"Exportar CSV",self.export_csv,THEME["acc_cyan"],"📥").pack(side='right')
+        _btn(tbl_hdr,"PDF",self.export_pdf,THEME["acc_rose"],"📄").pack(side='right',padx=(4,0))
+        _btn(tbl_hdr,"Excel",self.export_excel,THEME["acc_green"],"📊").pack(side='right',padx=(4,0))
+        _btn(tbl_hdr,"CSV",self.export_csv,THEME["acc_cyan"],"📥").pack(side='right')
         tk.Frame(tbl,bg=THEME["card_border"],height=1).pack(fill='x')
 
         cols=('ID','Fecha','Cliente','Total','Método','Usuario','Estado')
@@ -185,6 +392,16 @@ class ReportsModule:
         self.tree.tag_configure('odd',background=THEME["row_odd"])
         self.tree.tag_configure('even',background=THEME["row_even"])
         self.tree.tag_configure('credit',foreground=THEME["acc_purple"])
+
+        # ── Gráfico de ventas por día ──────────────────────────────────────────
+        chart_outer=RoundedCard(self.parent,padx=16,pady=12)
+        chart_outer.pack(fill='x',padx=24,pady=(0,10))
+        chart_card=chart_outer.body
+        chart_hdr=tk.Frame(chart_card,bg=THEME["card_bg"]); chart_hdr.pack(fill='x',pady=(0,8))
+        tk.Label(chart_hdr,text="📊  Ventas por Día",font=(FONT,11,'bold'),
+                 bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(side='left')
+        self._bar_chart = BarChart(chart_card, height=175)
+        self._bar_chart.pack(fill='x', padx=4, pady=(0,4))
 
     def _quick_filter(self,period):
         today=datetime.now()
@@ -240,6 +457,32 @@ class ReportsModule:
                 cajero,
                 'Crédito' if s.get('payment_method')=='Crédito' else 'Contado'))
         self.lbl_count.config(text=f"({len(self.sales_data)} registros)")
+
+        # ── Actualizar gráfico de barras ──────────────────────────────────────
+        try:
+            from datetime import datetime as _dt, timedelta as _td
+            dt_from = _dt.strptime(d_from, '%Y-%m-%d')
+            dt_to   = _dt.strptime(d_to,   '%Y-%m-%d')
+            delta   = (dt_to - dt_from).days + 1
+            # Agrupar totales por día
+            daily = {}
+            for s in self.sales_data:
+                day = str(s.get('sale_date',''))[:10]
+                daily[day] = daily.get(day, 0) + s.get('total', 0)
+            if delta <= 14:
+                chart_data = []
+                for i in range(delta):
+                    day = (dt_from + _td(days=i)).strftime('%Y-%m-%d')
+                    lbl = (dt_from + _td(days=i)).strftime('%d/%m')
+                    chart_data.append((lbl, daily.get(day, 0)))
+            else:
+                # Más de 14 días: mostrar los últimos 14 días con datos
+                items = sorted(daily.items())[-14:]
+                chart_data = [(_dt.strptime(d,'%Y-%m-%d').strftime('%d/%m'), v)
+                              for d,v in items]
+            self._bar_chart.set_data(chart_data)
+        except Exception:
+            pass
 
     def _show_sale_detail(self,_=None):
         sel=self.tree.selection()
@@ -522,6 +765,140 @@ class ReportsModule:
             os.startfile(os.path.dirname(path))
         except ImportError:
             messagebox.showerror("Error","Se requiere openpyxl: pip install openpyxl")
+        except Exception as ex:
+            messagebox.showerror("Error al exportar",str(ex))
+
+    def export_excel(self):
+        """Exporta el reporte actual a Excel usando openpyxl."""
+        if not self.sales_data:
+            messagebox.showinfo("Info","Sin datos para exportar"); return
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            messagebox.showerror("Error","Se requiere openpyxl:\npip install openpyxl"); return
+        try:
+            from tkinter import filedialog
+            import datetime, os
+            d_from=self.date_from.get().strip(); d_to=self.date_to.get().strip()
+            path=filedialog.asksaveasfilename(
+                defaultextension='.xlsx',
+                filetypes=[('Excel','*.xlsx')],
+                title="Guardar Excel",
+                initialfile=f"ventas_{d_from}_{d_to}.xlsx")
+            if not path: return
+
+            thin=Side(style='thin',color='D1D5DB')
+            brd=Border(left=thin,right=thin,top=thin,bottom=thin)
+
+            wb=openpyxl.Workbook()
+            ws=wb.active; ws.title="Ventas"
+
+            # Título
+            try:
+                from utils.company_header import get_company as _gc
+                empresa=_gc().get("razon_social","Venialgo POS")
+            except Exception:
+                empresa="Venialgo POS"
+
+            ws.merge_cells("A1:G1"); ws["A1"]=empresa
+            ws["A1"].font=Font(name='Arial',bold=True,size=14,color="2563EB")
+            ws["A1"].alignment=Alignment(horizontal='center')
+            ws.row_dimensions[1].height=22
+
+            ws.merge_cells("A2:G2")
+            ws["A2"]=f"Reporte de Ventas  |  Período: {d_from} → {d_to}"
+            ws["A2"].font=Font(name='Arial',size=9,color="6B7280",italic=True)
+            ws["A2"].alignment=Alignment(horizontal='center')
+
+            # Encabezados
+            headers=["ID","Fecha","Cliente","Total","Método","Cajero","Estado"]
+            for ci,h in enumerate(headers,1):
+                cell=ws.cell(row=3,column=ci,value=h)
+                cell.font=Font(name='Arial',bold=True,color="FFFFFF",size=10)
+                cell.fill=PatternFill('solid',start_color="111827")
+                cell.alignment=Alignment(horizontal='center',vertical='center')
+                cell.border=brd
+
+            for ci,w in enumerate([8,18,24,14,14,18,10],1):
+                ws.column_dimensions[get_column_letter(ci)].width=w
+
+            for ri,s in enumerate(self.sales_data,4):
+                bg="F9FAFB" if ri%2==0 else "FFFFFF"
+                cajero=s.get('cajero_nombre') or s.get('cashier_name','') or '—'
+                vals=[s.get('id',''),
+                      (s.get('sale_date','') or '')[:16],
+                      s.get('customer_name','') or 'Consumidor Final',
+                      s.get('total',0),
+                      s.get('payment_method',''),
+                      cajero,
+                      'Crédito' if s.get('payment_method','')=='Crédito' else 'Contado']
+                for ci,v in enumerate(vals,1):
+                    cell=ws.cell(row=ri,column=ci,value=v)
+                    cell.font=Font(name='Arial',size=9)
+                    cell.fill=PatternFill('solid',start_color=bg)
+                    cell.alignment=Alignment(
+                        horizontal='center' if ci not in(2,3) else 'left',
+                        vertical='center')
+                    cell.border=brd
+
+            wb.save(path)
+            messagebox.showinfo("✅ Exportado",f"Excel guardado en:\n{path}")
+            try: os.startfile(os.path.dirname(path))
+            except Exception: pass
+        except Exception as ex:
+            messagebox.showerror("Error al exportar",str(ex))
+
+    def export_pdf(self):
+        """Exporta el reporte como texto formateado (.txt abierto como reporte)."""
+        if not self.sales_data:
+            messagebox.showinfo("Info","Sin datos para exportar"); return
+        from tkinter import filedialog
+        import os
+        d_from=self.date_from.get().strip(); d_to=self.date_to.get().strip()
+        path=filedialog.asksaveasfilename(
+            defaultextension='.txt',
+            filetypes=[('Texto / PDF','*.txt'),('Todos','*.*')],
+            title="Guardar Reporte",
+            initialfile=f"reporte_{d_from}_{d_to}.txt")
+        if not path: return
+        try:
+            from datetime import datetime as _dt
+            try:
+                from utils.company_header import get_company as _gc
+                empresa=_gc().get("razon_social","Venialgo POS")
+            except Exception:
+                empresa="Venialgo POS"
+
+            SEP="═"*56; sep="-"*56
+            lines=[
+                SEP,
+                empresa.center(56),
+                "REPORTE DE VENTAS".center(56),
+                f"Período: {d_from}  →  {d_to}".center(56),
+                f"Generado: {_dt.now().strftime('%d/%m/%Y %H:%M')}".center(56),
+                SEP,"",
+                f"  {'#':<6} {'Fecha':<18} {'Total':>12}  {'Método'}",
+                sep,
+            ]
+            total_global=0
+            for s in self.sales_data:
+                lines.append(
+                    f"  #{str(s.get('id','')):<5} "
+                    f"{str(s.get('sale_date',''))[:16]:<18} "
+                    f"{format_currency(s.get('total',0)):>12}  "
+                    f"{s.get('payment_method','')}")
+                total_global+=s.get('total',0)
+            lines+=[sep,
+                    f"  {'TOTAL':>25} {format_currency(total_global):>12}",
+                    f"  {'Transacciones:':>25} {len(self.sales_data):>12}",
+                    SEP,""]
+            with open(path,'w',encoding='utf-8') as f:
+                f.write('\n'.join(lines))
+            messagebox.showinfo("✅ Exportado",f"Reporte guardado en:\n{path}")
+            try: os.startfile(path)
+            except Exception: pass
         except Exception as ex:
             messagebox.showerror("Error al exportar",str(ex))
 

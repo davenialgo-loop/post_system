@@ -21,37 +21,140 @@ THEME = {"ct_bg":"#F9FAFB","card_bg":"#FFFFFF","card_border":"#E5E7EB","sb_bg":"
     "row_odd":"#F9FAFB","row_even":"#FFFFFF"}
 FONT="Segoe UI"
 
-def _btn(parent, text, cmd, bg, icon="", **kw):
-    t = (icon + "  " + text) if icon else text
+# ── Rounded card widget ───────────────────────────────────────────────────
+def _draw_rr(c, x1, y1, x2, y2, r, fill, outline):
+    """Rounded rect on canvas; tag='rc'."""
+    kw = {'tags': 'rc'}
+    r = min(r, max(1,(x2-x1)//2), max(1,(y2-y1)//2))
+    c.create_rectangle(x1+r,y1,x2-r,y2, fill=fill,outline='',**kw)
+    c.create_rectangle(x1,y1+r,x2,y2-r, fill=fill,outline='',**kw)
+    for cx,cy,st in [(x1,y1,90),(x2-2*r,y1,0),(x1,y2-2*r,180),(x2-2*r,y2-2*r,270)]:
+        c.create_arc(cx,cy,cx+2*r,cy+2*r,start=st,extent=90,fill=fill,outline=fill,**kw)
+    c.create_line(x1+r,y1,x2-r,y1,fill=outline,**kw)
+    c.create_line(x1+r,y2,x2-r,y2,fill=outline,**kw)
+    c.create_line(x1,y1+r,x1,y2-r,fill=outline,**kw)
+    c.create_line(x2,y1+r,x2,y2-r,fill=outline,**kw)
+    for cx,cy,st in [(x1,y1,90),(x2-2*r,y1,0),(x1,y2-2*r,180),(x2-2*r,y2-2*r,270)]:
+        c.create_arc(cx,cy,cx+2*r,cy+2*r,start=st,extent=90,fill='',outline=outline,style='arc',**kw)
+
+class RoundedCard(tk.Canvas):
+    """Canvas card with rounded corners.
+    fill_mode=False → body height drives canvas height (for KPI/form cards).
+    fill_mode=True  → canvas height drives body height (for table/fill cards).
+    """
+    def __init__(self, parent, radius=8, card_bg=None, border_color=None,
+                 padx=16, pady=12, fill_mode=False, **kw):
+        card_bg      = card_bg or THEME.get('card_bg','#FFFFFF')
+        border_color = border_color or THEME.get('card_border','#E5E7EB')
+        try: par_bg = parent.cget('bg')
+        except: par_bg = THEME.get('ct_bg','#F9FAFB')
+        super().__init__(parent, bg=par_bg, highlightthickness=0, bd=0, **kw)
+        self._r=radius; self._fill=card_bg; self._bc=border_color; self._fm=fill_mode
+        self._body=tk.Frame(self, bg=card_bg, padx=padx, pady=pady)
+        self._fid=self.create_window(radius, radius, anchor='nw', window=self._body)
+        self.bind('<Configure>', self._on_cv)
+        if not fill_mode:
+            self._body.bind('<Configure>', self._on_body)
+    @property
+    def body(self): return self._body
+    def _on_cv(self, e):
+        r=self._r; bw=max(1,e.width-2*r)
+        self.itemconfig(self._fid, width=bw)
+        if self._fm: self.itemconfig(self._fid, height=max(1,e.height-2*r))
+        self.delete('rc')
+        if e.width>3 and e.height>3:
+            _draw_rr(self,1,1,e.width-1,e.height-1,r,self._fill,self._bc)
+            self.tag_lower('rc')
+    def _on_body(self, e):
+        r=self._r; need_h=e.height+2*r
+        if abs(self.winfo_height()-need_h)>1: self.configure(height=need_h)
+
+# ── Rounded button widget ─────────────────────────────────────────────────
+class RoundedButton(tk.Canvas):
+    """Canvas button with rounded corners. Always draws correct color on resize."""
+    _R        = 6
     _DISABLED = "#9CA3AF"
+
+    def __init__(self, parent, text, cmd, bg,
+                 icon="", font_size=10, btn_pady=9, **kw):
+        kw.pop('padx', None); kw.pop('pady', None)
+        self._t   = (f"{icon}  {text}") if icon else text
+        self._cmd = cmd
+        self._bg  = bg
+        self._fnt = (FONT, font_size, 'bold')
+        self._on  = False
+        try:    par_bg = parent.cget('bg')
+        except: par_bg = THEME.get('ct_bg','#F9FAFB')
+        import tkinter.font as _tf
+        _f = _tf.Font(family=FONT, size=font_size, weight='bold')
+        h  = _f.metrics('linespace') + btn_pady * 2 + 2
+        super().__init__(parent, height=h, highlightthickness=0,
+                         bd=0, bg=par_bg, cursor='arrow', **kw)
+        self.bind('<Configure>',       self._on_cfg)
+        self.bind('<Enter>',           self._hover_in)
+        self.bind('<Leave>',           self._hover_out)
+        self.bind('<ButtonRelease-1>', self._click)
+
+    @staticmethod
     def _dk(c):
-        r,g,b = int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)
-        return "#{:02x}{:02x}{:02x}".format(max(0,int(r*.82)),max(0,int(g*.82)),max(0,int(b*.82)))
-    _state = {"on": False}
-    lbl = tk.Label(parent, text=t, font=(FONT,10,"bold"),
-                   bg=_DISABLED, fg="#ffffff",
-                   cursor="arrow", padx=14, pady=8, **kw)
-    def _on_enter(_=None):
-        if _state["on"]: lbl.config(bg=_dk(bg))
-    def _on_leave(_=None):
-        lbl.config(bg=bg if _state["on"] else _DISABLED)
-    def _on_click(_=None):
-        if _state["on"] and cmd:
-            lbl.config(bg=_dk(_dk(bg)))
-            lbl.after(120, lambda: lbl.config(bg=bg))
-            cmd()
-    lbl.bind("<Enter>",           _on_enter)
-    lbl.bind("<Leave>",           _on_leave)
-    lbl.bind("<ButtonRelease-1>", _on_click)
-    def enable():
-        _state["on"] = True
-        lbl.config(bg=bg, fg="#ffffff", cursor="hand2")
-    def disable():
-        _state["on"] = False
-        lbl.config(bg=_DISABLED, fg="#ffffff", cursor="arrow")
-    lbl.enable  = enable
-    lbl.disable = disable
-    return lbl
+        r,g,b = int(c[1:3],16),int(c[3:5],16),int(c[5:7],16)
+        return "#{:02x}{:02x}{:02x}".format(
+            max(0,int(r*.82)),max(0,int(g*.82)),max(0,int(b*.82)))
+
+    def _draw(self, color=None):
+        if color is None: color = self._bg if self._on else self._DISABLED
+        self.delete('all')
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 4 or h < 4: return
+        r = min(self._R, w//2, h//2)
+        self.create_rectangle(r, 0, w-r, h, fill=color, outline='')
+        self.create_rectangle(0, r, w, h-r, fill=color, outline='')
+        for cx,cy,st in [(0,0,90),(w-2*r,0,0),(0,h-2*r,180),(w-2*r,h-2*r,270)]:
+            self.create_arc(cx,cy,cx+2*r,cy+2*r,
+                            start=st,extent=90,fill=color,outline=color)
+        self.create_text(w//2, h//2, text=self._t,
+                         font=self._fnt, fill='#ffffff', anchor='center')
+
+    def _on_cfg(self, e=None):
+        # winfo_width returns 1 until first layout — use event width if available
+        w = (e.width if e and hasattr(e,'width') else 0) or self.winfo_width()
+        if w > 4:
+            self._draw()
+        else:
+            self.after(20, self._draw)   # retry after layout pass
+
+    def _hover_in(self, _=None):
+        if self._on: self._draw(self._dk(self._bg))
+    def _hover_out(self, _=None): self._draw()
+    def _click(self, _=None):
+        if self._on and self._cmd:
+            self._draw(self._dk(self._dk(self._bg)))
+            self.after(120, self._draw)
+            self._cmd()
+
+    def enable(self):
+        self._on = True
+        self.config(cursor='hand2')
+        self.after_idle(self._draw)   # draw after Tk processes geometry
+
+    def disable(self):
+        self._on = False
+        self.config(cursor='arrow')
+        self.after_idle(self._draw)
+
+
+def _btn(parent, text, cmd, bg, icon="", font_size=10, btn_pady=9, **kw):
+    """Rounded button — always enabled."""
+    kw.pop('padx', None); kw.pop('pady', None)
+    b = RoundedButton(parent, text, cmd, bg, icon=icon,
+                      font_size=font_size, btn_pady=btn_pady, **kw)
+    b.enable()
+    return b
+
+
+
+
+
 
 def _setup_styles():
     s=ttk.Style()
@@ -76,9 +179,8 @@ class CreditsModule:
         self._build(); self.load_credits()
 
     def _stat_card(self,parent,title,value,accent):
-        outer=tk.Frame(parent,bg=THEME["card_border"])
-        inner=tk.Frame(outer,bg=THEME["card_bg"],padx=16,pady=14)
-        inner.pack(fill='both',expand=True,padx=1,pady=1)
+        outer=RoundedCard(parent,padx=16,pady=14)
+        inner=outer.body
         tk.Label(inner,text=title,font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
         lbl=tk.Label(inner,text=value,font=(FONT,18,'bold'),bg=THEME["card_bg"],fg=accent)
         lbl.pack(anchor='w',pady=(4,0))
@@ -119,10 +221,9 @@ class CreditsModule:
         for i in range(3): stats_row.columnconfigure(i,weight=1)
 
         # Tabla
-        tbl_outer=tk.Frame(self.parent,bg=THEME["card_border"])
+        tbl_outer=RoundedCard(self.parent,padx=0,pady=0,fill_mode=True)
         tbl_outer.pack(fill='both',expand=True,padx=24,pady=(0,10))
-        tbl=tk.Frame(tbl_outer,bg=THEME["card_bg"])
-        tbl.pack(fill='both',expand=True,padx=1,pady=1)
+        tbl=tbl_outer.body
 
         cols=('ID','Cliente','Productos','Total','Saldo','Cuota','Pagadas','Próximo','Estado')
         self.tree=ttk.Treeview(tbl,columns=cols,show='headings',style='POS.Treeview')
