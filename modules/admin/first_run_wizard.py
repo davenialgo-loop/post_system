@@ -1,12 +1,12 @@
 """
 first_run_wizard.py
 Asistente de configuración inicial — Primera vez que se inicia el sistema.
-Diseño moderno consistente con el sistema POS.
+Incluye creación de cuenta Administrador y pregunta de seguridad.
 """
 
 import tkinter as tk
 from tkinter import messagebox, filedialog
-import sqlite3, shutil, os, sys
+import sqlite3, shutil, os, sys, hashlib
 from pathlib import Path
 
 try:
@@ -47,6 +47,15 @@ FOOTER_INFO = {
     "web":      "www.venialgosistemas.com",
 }
 
+SECURITY_QUESTIONS = [
+    "¿Cuál es el nombre de tu primera mascota?",
+    "¿En qué ciudad naciste?",
+    "¿Cuál es el nombre de tu madre?",
+    "¿Cuál fue el nombre de tu primera escuela?",
+    "¿Cuál es tu película favorita?",
+    "¿Cuál es el apodo de tu mejor amigo/a de infancia?",
+]
+
 # ── Rutas ──────────────────────────────────────────────────────
 def _appdata_dir():
     base = os.environ.get("APPDATA", os.path.expanduser("~")) if sys.platform=="win32" \
@@ -78,7 +87,6 @@ def _apply_icon(window):
 
 
 def _gradient_canvas(parent, w, h):
-    """Canvas con degradado #0D1B4B → #1A3A8F."""
     canvas = tk.Canvas(parent, width=w, height=h, highlightthickness=0, bd=0)
     canvas.pack(fill="x")
     r1,g1,b1 = 0x0D,0x1B,0x4B
@@ -91,7 +99,6 @@ def _gradient_canvas(parent, w, h):
 
 
 def _styled_entry(parent, var, show=""):
-    """Entry con borde que cambia al hacer foco."""
     frm = tk.Frame(parent, bg=THEME["input_brd"], padx=1, pady=1)
     ent = tk.Entry(frm, textvariable=var, show=show,
                    font=(FONT, 11), relief="flat",
@@ -118,14 +125,29 @@ def _label_btn(parent, text, cmd, bg, hover=None, width=None):
 # ── BD helpers ────────────────────────────────────────────────
 
 def is_first_run() -> bool:
+    """True si no hay empresa configurada O no hay ningún usuario administrador."""
     if os.path.exists(FIRST_RUN_FLAG):
-        return False
+        # Verificar también que exista al menos un admin en la BD
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            row = conn.execute(
+                "SELECT COUNT(*) FROM usuarios WHERE rol='Administrador' AND activo=1"
+            ).fetchone()
+            conn.close()
+            if row and row[0] > 0:
+                return False
+        except Exception:
+            pass
+        return True
     try:
         conn = sqlite3.connect(DB_FILE)
-        row  = conn.execute(
+        empresa = conn.execute(
             "SELECT razon_social FROM empresa WHERE id=1").fetchone()
+        admin = conn.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE rol='Administrador' AND activo=1"
+        ).fetchone()
         conn.close()
-        if row and row[0]:
+        if empresa and empresa[0] and admin and admin[0] > 0:
             return False
     except Exception:
         pass
@@ -168,10 +190,51 @@ def save_company_data(data: dict) -> bool:
                  data.get("telefono",""), data.get("direccion",""),
                  data.get("correo",""), data.get("logo_path","")))
         conn.commit(); conn.close()
-        _mark_done()
         return True
     except Exception as e:
         print(f"[save_company_data] {e}")
+        return False
+
+
+def create_admin_user(nombre, usuario, password,
+                      pregunta, respuesta) -> bool:
+    """Crea el usuario administrador inicial con pregunta de seguridad."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        # Ensure usuarios table exists with security columns
+        c.execute("""CREATE TABLE IF NOT EXISTS usuarios (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre    TEXT NOT NULL,
+            usuario   TEXT UNIQUE NOT NULL,
+            password  TEXT NOT NULL,
+            rol       TEXT DEFAULT 'Cajero',
+            activo    INTEGER DEFAULT 1,
+            creado_en TEXT
+        )""")
+        for col_def in [
+            "pregunta_seguridad TEXT DEFAULT ''",
+            "respuesta_seguridad   TEXT DEFAULT ''",
+        ]:
+            try: c.execute(f"ALTER TABLE usuarios ADD COLUMN {col_def}")
+            except: pass
+
+        from datetime import datetime
+        hpwd  = hashlib.sha256(password.encode()).hexdigest()
+        hresp = hashlib.sha256(respuesta.strip().lower().encode()).hexdigest()
+        c.execute(
+            """INSERT INTO usuarios
+               (nombre, usuario, password, rol, activo, creado_en,
+                pregunta_seguridad, respuesta_seguridad)
+               VALUES (?,?,?,?,1,?,?,?)""",
+            (nombre, usuario, hpwd, "Administrador",
+             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+             pregunta, hresp)
+        )
+        conn.commit(); conn.close()
+        return True
+    except Exception as e:
+        print(f"[create_admin_user] {e}")
         return False
 
 
@@ -216,7 +279,8 @@ def copy_logo(src_path: str) -> str:
 class FirstRunWizard:
     PASOS = [
         ("🏠", "Bienvenida"),
-        ("🏢", "Datos Empresa"),
+        ("🏢", "Empresa"),
+        ("👤", "Cuenta Admin"),
         ("🖼",  "Logo"),
         ("✅", "Confirmación"),
     ]
@@ -249,25 +313,29 @@ class FirstRunWizard:
     def _on_close_attempt(self):
         messagebox.showwarning("Configuración requerida",
             "Debe completar la configuración inicial para usar el sistema.\n"
-            "Puede omitir los campos opcionales, pero Razón Social y RUC son obligatorios.",
+            "Puede omitir los campos opcionales, pero los marcados con * son obligatorios.",
             parent=self.win)
 
     def _init_vars(self):
+        # Empresa
         self.vars = {k: tk.StringVar() for k in
                      ["razon_social","ruc","telefono","correo","direccion"]}
+        # Admin account
+        self.admin_vars = {k: tk.StringVar() for k in
+                           ["nombre","usuario","password","password2"]}
+        self.admin_vars["pregunta"] = tk.StringVar(value=SECURITY_QUESTIONS[0])
+        self.admin_vars["respuesta"] = tk.StringVar()
 
     # ── Shell ──────────────────────────────────────────────────
     def _build_shell(self):
-        W = 720
+        W = 740
 
-        # ── Header degradado ──────────────────────────────────
         hdr_canvas = _gradient_canvas(self.win, W, 80)
         hdr_canvas.create_text(W//2, 32, text="⚙️  Configuración Inicial del Sistema",
                                 font=(FONT, 14, "bold"), fill=THEME["txt_white"], anchor="center")
-        hdr_canvas.create_text(W//2, 56, text="Complete los datos de su empresa antes de comenzar",
+        hdr_canvas.create_text(W//2, 56, text="Complete los datos antes de comenzar",
                                 font=(FONT, 9), fill="#9DB4E0", anchor="center")
 
-        # ── Barra de pasos ────────────────────────────────────
         steps_row = tk.Frame(self.win, bg=THEME["step_bar"], height=48)
         steps_row.pack(fill="x")
         steps_row.pack_propagate(False)
@@ -283,11 +351,9 @@ class FirstRunWizard:
             self._step_frames.append(cell)
             self._step_labels.append(lbl)
 
-        # ── Contenido ─────────────────────────────────────────
         self.frm_content = tk.Frame(self.win, bg=THEME["card_bg"], width=W)
         self.frm_content.pack(fill="both", expand=True)
 
-        # ── Barra de navegación ───────────────────────────────
         nav_sep = tk.Frame(self.win, bg=THEME["border"], height=1)
         nav_sep.pack(fill="x")
 
@@ -302,7 +368,6 @@ class FirstRunWizard:
                                     THEME["acc_blue"], THEME["acc_blue_dk"], width=18)
         self._btn_next.pack(side="right", padx=20)
 
-        # Footer info centrado
         tk.Label(nav,
                  text=f"{FOOTER_INFO['empresa']}  |  {FOOTER_INFO['email']}  |  {FOOTER_INFO['whatsapp']}",
                  font=(FONT, 7), bg=THEME["ct_bg"],
@@ -331,14 +396,12 @@ class FirstRunWizard:
             w.destroy()
         self._update_steps(n)
 
-        # Botón back
         state = "normal" if n > 0 else "disabled"
         self._btn_back.config(state=state,
                               bg="#E5E7EB" if n > 0 else "#F3F4F6",
                               fg=THEME["txt_primary"] if n > 0 else THEME["txt_secondary"],
                               cursor="hand2" if n > 0 else "arrow")
 
-        # Botón next — último paso cambia a Guardar
         if n == len(self.PASOS) - 1:
             self._btn_next.config(text="💾  Guardar y Comenzar",
                                   bg=THEME["acc_green"])
@@ -350,10 +413,13 @@ class FirstRunWizard:
             self._btn_next.bind("<Leave>", lambda e: self._btn_next.config(bg=THEME["acc_blue"]))
 
         [self._paso_bienvenida, self._paso_datos,
-         self._paso_logo, self._paso_confirmacion][n]()
+         self._paso_admin, self._paso_logo,
+         self._paso_confirmacion][n]()
 
     def _next(self):
         if self._paso_actual == 1 and not self._validar_datos():
+            return
+        if self._paso_actual == 2 and not self._validar_admin():
             return
         if self._paso_actual == len(self.PASOS) - 1:
             self._guardar()
@@ -369,7 +435,6 @@ class FirstRunWizard:
         pad = tk.Frame(self.frm_content, bg=THEME["card_bg"], padx=56, pady=28)
         pad.pack(fill="both", expand=True)
 
-        # Intentar mostrar logo Venialgo
         _logo_shown = False
         try:
             cur = os.path.dirname(os.path.abspath(__file__))
@@ -404,14 +469,11 @@ class FirstRunWizard:
                  font=(FONT, 10), bg=THEME["card_bg"],
                  fg=THEME["txt_secondary"]).pack(pady=(4, 20))
 
-        # Cards de pasos
         for icon, titulo, desc in [
-            ("🏢", "Datos de la empresa",
-             "Razón social, RUC, teléfono y dirección"),
-            ("🖼",  "Logo de la empresa",
-             "Se mostrará en el sidebar y en los tickets"),
-            ("✅", "Confirmación",
-             "Revisión final antes de comenzar"),
+            ("🏢", "Datos de la empresa",   "Razón social, RUC, teléfono y dirección"),
+            ("👤", "Cuenta Administrador",  "Usuario y contraseña para ingresar al sistema"),
+            ("🖼",  "Logo de la empresa",   "Se mostrará en el sidebar y en los tickets"),
+            ("✅", "Confirmación",           "Revisión final antes de comenzar"),
         ]:
             row = tk.Frame(pad, bg="#EFF6FF",
                            highlightbackground="#BFDBFE",
@@ -449,7 +511,6 @@ class FirstRunWizard:
             ("Dirección",               "direccion"),
         ]
 
-        # Dos columnas
         grid = tk.Frame(pad, bg=THEME["card_bg"])
         grid.pack(fill="x")
         grid.columnconfigure(0, weight=1)
@@ -475,7 +536,120 @@ class FirstRunWizard:
             return False
         return True
 
-    # ── PASO 2: Logo ───────────────────────────────────────────
+    # ── PASO 2: Cuenta Administrador ──────────────────────────
+    def _paso_admin(self):
+        pad = tk.Frame(self.frm_content, bg=THEME["card_bg"], padx=56, pady=20)
+        pad.pack(fill="both", expand=True)
+
+        tk.Label(pad, text="👤  Cuenta Administrador",
+                 font=(FONT, 14, "bold"),
+                 bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(anchor="w")
+        tk.Label(pad,
+                 text="Cree el usuario principal para ingresar al sistema. Todos los campos son obligatorios.",
+                 font=(FONT, 8), bg=THEME["card_bg"],
+                 fg=THEME["txt_secondary"]).pack(anchor="w", pady=(2, 12))
+        tk.Frame(pad, bg=THEME["border"], height=1).pack(fill="x", pady=(0,14))
+
+        grid = tk.Frame(pad, bg=THEME["card_bg"])
+        grid.pack(fill="x")
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
+
+        # Nombre completo y usuario en primera fila
+        for col_i, (label, key, show) in enumerate([
+            ("Nombre completo *",  "nombre",   ""),
+            ("Usuario (login) *",  "usuario",  ""),
+        ]):
+            cell = tk.Frame(grid, bg=THEME["card_bg"], padx=6, pady=4)
+            cell.grid(row=0, column=col_i, sticky="ew")
+            tk.Label(cell, text=label, font=(FONT, 9, "bold"),
+                     bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,3))
+            frm, _ = _styled_entry(cell, self.admin_vars[key], show=show)
+            frm.pack(fill="x")
+
+        # Contraseña y confirmar
+        for col_i, (label, key) in enumerate([
+            ("Contraseña *",         "password"),
+            ("Confirmar contraseña *","password2"),
+        ]):
+            cell = tk.Frame(grid, bg=THEME["card_bg"], padx=6, pady=4)
+            cell.grid(row=1, column=col_i, sticky="ew")
+            tk.Label(cell, text=label, font=(FONT, 9, "bold"),
+                     bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,3))
+            frm, _ = _styled_entry(cell, self.admin_vars[key], show="●")
+            frm.pack(fill="x")
+
+        # Sección pregunta de seguridad
+        sec_card = tk.Frame(pad, bg="#FFFBEB",
+                            highlightbackground="#FDE68A",
+                            highlightthickness=1, padx=16, pady=12)
+        sec_card.pack(fill="x", pady=(12,0))
+
+        hdr_row = tk.Frame(sec_card, bg="#FFFBEB")
+        hdr_row.pack(fill="x", pady=(0,8))
+        tk.Label(hdr_row, text="🔐", font=(FONT, 16), bg="#FFFBEB").pack(side="left", padx=(0,8))
+        col2 = tk.Frame(hdr_row, bg="#FFFBEB")
+        col2.pack(side="left")
+        tk.Label(col2, text="Pregunta de seguridad",
+                 font=(FONT, 10, "bold"), bg="#FFFBEB",
+                 fg=THEME["txt_primary"]).pack(anchor="w")
+        tk.Label(col2, text="Se usará para recuperar su contraseña si la olvida",
+                 font=(FONT, 8), bg="#FFFBEB",
+                 fg="#92400E").pack(anchor="w")
+
+        tk.Frame(sec_card, bg="#FDE68A", height=1).pack(fill="x", pady=(0,10))
+
+        # Dropdown pregunta
+        tk.Label(sec_card, text="Pregunta *", font=(FONT, 9, "bold"),
+                 bg="#FFFBEB", fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,3))
+        opt = tk.OptionMenu(sec_card, self.admin_vars["pregunta"], *SECURITY_QUESTIONS)
+        opt.config(font=(FONT, 9), bg=THEME["card_bg"], fg=THEME["txt_primary"],
+                   relief="flat", bd=1, highlightbackground=THEME["input_brd"],
+                   activebackground="#EFF6FF", cursor="hand2")
+        opt["menu"].config(font=(FONT, 9))
+        opt.pack(fill="x", pady=(0,8))
+
+        # Respuesta
+        tk.Label(sec_card, text="Respuesta *", font=(FONT, 9, "bold"),
+                 bg="#FFFBEB", fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,3))
+        frm_r, _ = _styled_entry(sec_card, self.admin_vars["respuesta"])
+        frm_r.pack(fill="x")
+        tk.Label(sec_card,
+                 text="⚠  Guarde esta respuesta, la necesitará para recuperar acceso",
+                 font=(FONT, 8), bg="#FFFBEB", fg="#B45309").pack(anchor="w", pady=(6,0))
+
+    def _validar_admin(self) -> bool:
+        v = self.admin_vars
+        nombre   = v["nombre"].get().strip()
+        usuario  = v["usuario"].get().strip()
+        password = v["password"].get()
+        password2= v["password2"].get()
+        respuesta= v["respuesta"].get().strip()
+
+        if not nombre:
+            messagebox.showwarning("Campo requerido", "El nombre completo es obligatorio.", parent=self.win)
+            return False
+        if not usuario:
+            messagebox.showwarning("Campo requerido", "El nombre de usuario es obligatorio.", parent=self.win)
+            return False
+        if len(usuario) < 3:
+            messagebox.showwarning("Usuario inválido", "El usuario debe tener al menos 3 caracteres.", parent=self.win)
+            return False
+        if not password:
+            messagebox.showwarning("Campo requerido", "La contraseña es obligatoria.", parent=self.win)
+            return False
+        if len(password) < 6:
+            messagebox.showwarning("Contraseña débil", "La contraseña debe tener al menos 6 caracteres.", parent=self.win)
+            return False
+        if password != password2:
+            messagebox.showwarning("Error", "Las contraseñas no coinciden.", parent=self.win)
+            return False
+        if not respuesta:
+            messagebox.showwarning("Campo requerido", "La respuesta de seguridad es obligatoria.", parent=self.win)
+            return False
+        return True
+
+    # ── PASO 3: Logo ───────────────────────────────────────────
     def _paso_logo(self):
         pad = tk.Frame(self.frm_content, bg=THEME["card_bg"], padx=56, pady=24)
         pad.pack(fill="both", expand=True)
@@ -488,11 +662,9 @@ class FirstRunWizard:
                  fg=THEME["txt_secondary"]).pack(anchor="w", pady=(2, 16))
         tk.Frame(pad, bg=THEME["border"], height=1).pack(fill="x", pady=(0,16))
 
-        # Preview + controles en fila
         row = tk.Frame(pad, bg=THEME["card_bg"])
         row.pack(fill="x")
 
-        # Preview box
         preview_outer = tk.Frame(row, bg=THEME["border"], padx=1, pady=1)
         preview_outer.pack(side="left", padx=(0,20))
         preview_box = tk.Frame(preview_outer, bg=THEME["ct_bg"], width=150, height=110)
@@ -503,7 +675,6 @@ class FirstRunWizard:
                                      fg=THEME["txt_secondary"], justify="center")
         self._lbl_preview.pack(expand=True)
 
-        # Controles
         right = tk.Frame(row, bg=THEME["card_bg"])
         right.pack(side="left", fill="both", expand=True)
 
@@ -528,7 +699,6 @@ class FirstRunWizard:
         _label_btn(btn_row, "✕  Quitar",
                    self._clear_logo, "#6B7280", "#4B5563").pack(side="left")
 
-        # Si ya hay logo, mostrarlo
         if self._logo_src:
             self._preview_logo(self._logo_src)
 
@@ -563,7 +733,7 @@ class FirstRunWizard:
         except Exception:
             self._lbl_preview.config(text=f"✅\n{os.path.basename(path)}")
 
-    # ── PASO 3: Confirmación ───────────────────────────────────
+    # ── PASO 4: Confirmación ───────────────────────────────────
     def _paso_confirmacion(self):
         pad = tk.Frame(self.frm_content, bg=THEME["card_bg"], padx=56, pady=24)
         pad.pack(fill="both", expand=True)
@@ -573,45 +743,57 @@ class FirstRunWizard:
                  bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(anchor="w")
         tk.Label(pad, text="Verifique que los datos sean correctos antes de guardar",
                  font=(FONT, 8), bg=THEME["card_bg"],
-                 fg=THEME["txt_secondary"]).pack(anchor="w", pady=(2, 16))
-        tk.Frame(pad, bg=THEME["border"], height=1).pack(fill="x", pady=(0,16))
+                 fg=THEME["txt_secondary"]).pack(anchor="w", pady=(2, 12))
+        tk.Frame(pad, bg=THEME["border"], height=1).pack(fill="x", pady=(0,12))
 
-        # Card resumen
-        card = tk.Frame(pad, bg="#EFF6FF",
-                        highlightbackground="#BFDBFE",
-                        highlightthickness=1, padx=20, pady=16)
-        card.pack(fill="x", pady=(0,16))
+        # Empresa
+        self._resumen_card(pad, "🏢  Empresa", [
+            ("Razón Social",  self.vars["razon_social"].get() or "—"),
+            ("RUC / NIT",     self.vars["ruc"].get() or "—"),
+            ("Teléfono",      self.vars["telefono"].get() or "(no ingresado)"),
+            ("Correo",        self.vars["correo"].get() or "(no ingresado)"),
+            ("Dirección",     self.vars["direccion"].get() or "(no ingresado)"),
+            ("Logo",          os.path.basename(self._logo_src) if self._logo_src else "(sin logo)"),
+        ])
 
-        resumen = [
-            ("🏢  Razón Social",  self.vars["razon_social"].get() or "—"),
-            ("🔢  RUC / NIT",     self.vars["ruc"].get() or "—"),
-            ("📞  Teléfono",      self.vars["telefono"].get() or "(no ingresado)"),
-            ("✉   Correo",        self.vars["correo"].get() or "(no ingresado)"),
-            ("📍  Dirección",     self.vars["direccion"].get() or "(no ingresado)"),
-            ("🖼   Logo",         os.path.basename(self._logo_src) if self._logo_src else "(sin logo)"),
-        ]
-        for lbl, val in resumen:
-            row = tk.Frame(card, bg="#EFF6FF")
-            row.pack(fill="x", pady=3)
-            tk.Label(row, text=lbl, font=(FONT, 9, "bold"),
-                     bg="#EFF6FF", fg="#1E40AF",
-                     width=18, anchor="w").pack(side="left")
-            is_missing = val in ["(no ingresado)", "(sin logo)", "—"]
-            tk.Label(row, text=val, font=(FONT, 9),
-                     bg="#EFF6FF",
-                     fg=THEME["txt_secondary"] if is_missing else THEME["txt_primary"],
-                     anchor="w").pack(side="left", padx=6)
+        # Admin
+        self._resumen_card(pad, "👤  Cuenta Administrador", [
+            ("Nombre",   self.admin_vars["nombre"].get() or "—"),
+            ("Usuario",  self.admin_vars["usuario"].get() or "—"),
+            ("Contraseña", "●●●●●●●●"),
+            ("Pregunta", self.admin_vars["pregunta"].get()[:48] + "…"
+                         if len(self.admin_vars["pregunta"].get()) > 48
+                         else self.admin_vars["pregunta"].get()),
+        ], bg="#F0FDF4", border="#A7F3D0", lbl_fg="#065F46")
 
         tk.Label(pad,
-                 text="💡 Puede modificar estos datos en cualquier momento desde\n"
-                      "   Configuración → Empresa",
+                 text="💡 Puede modificar estos datos en cualquier momento desde Configuración",
                  font=(FONT, 8), bg=THEME["card_bg"],
-                 fg=THEME["txt_secondary"], justify="left").pack(anchor="w")
+                 fg=THEME["txt_secondary"], justify="left").pack(anchor="w", pady=(8,0))
+
+    def _resumen_card(self, parent, titulo, filas, bg="#EFF6FF",
+                      border="#BFDBFE", lbl_fg="#1E40AF"):
+        card = tk.Frame(parent, bg=bg,
+                        highlightbackground=border,
+                        highlightthickness=1, padx=20, pady=12)
+        card.pack(fill="x", pady=(0,10))
+        tk.Label(card, text=titulo, font=(FONT, 10, "bold"),
+                 bg=bg, fg=lbl_fg).pack(anchor="w", pady=(0,6))
+        for lbl, val in filas:
+            row = tk.Frame(card, bg=bg)
+            row.pack(fill="x", pady=2)
+            is_missing = val in ["(no ingresado)", "(sin logo)", "—"]
+            tk.Label(row, text=lbl, font=(FONT, 9, "bold"),
+                     bg=bg, fg=lbl_fg, width=14, anchor="w").pack(side="left")
+            tk.Label(row, text=val, font=(FONT, 9),
+                     bg=bg,
+                     fg=THEME["txt_secondary"] if is_missing else THEME["txt_primary"],
+                     anchor="w").pack(side="left", padx=6)
 
     # ── Guardar ────────────────────────────────────────────────
     def _guardar(self):
         logo_dest = copy_logo(self._logo_src) if self._logo_src else ""
-        data = {
+        company_data = {
             "razon_social": self.vars["razon_social"].get().strip(),
             "ruc":          self.vars["ruc"].get().strip(),
             "telefono":     self.vars["telefono"].get().strip(),
@@ -619,15 +801,27 @@ class FirstRunWizard:
             "correo":       self.vars["correo"].get().strip(),
             "logo_path":    logo_dest,
         }
-        if save_company_data(data):
+
+        ok_empresa = save_company_data(company_data)
+        ok_admin   = create_admin_user(
+            nombre   = self.admin_vars["nombre"].get().strip(),
+            usuario  = self.admin_vars["usuario"].get().strip(),
+            password = self.admin_vars["password"].get(),
+            pregunta = self.admin_vars["pregunta"].get(),
+            respuesta= self.admin_vars["respuesta"].get().strip(),
+        )
+
+        if ok_empresa and ok_admin:
+            _mark_done()
             messagebox.showinfo("✅ Configuración guardada",
-                "Los datos de la empresa han sido guardados.\n"
-                "¡El sistema está listo para usar!",
+                f"¡El sistema está listo para usar!\n\n"
+                f"Usuario: {self.admin_vars['usuario'].get().strip()}\n"
+                f"Use la contraseña que acaba de crear para ingresar.",
                 parent=self.win)
             self.win.destroy()
             self.on_complete()
         else:
             log = os.path.join(os.path.dirname(DB_FILE), "error_log.txt")
             messagebox.showerror("Error al guardar",
-                f"No se pudieron guardar los datos.\nRevise el archivo de log:\n{log}",
+                f"No se pudieron guardar los datos.\nRevise: {log}",
                 parent=self.win)

@@ -24,8 +24,6 @@ from modules.admin.license_ui import eula_accepted, EULAWindow, ActivationWindow
 from modules.admin.login_window import LoginWindow
 from modules.admin.first_run_wizard import is_first_run, FirstRunWizard
 
-# Hash SHA-256 de la contraseña por defecto 'admin123'
-DEFAULT_ADMIN_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
 from utils.company_header import get_company
 
 APP_VERSION = "1.1"
@@ -371,120 +369,7 @@ class AppStarter:
     def _after_login(self):
         if not self.user_data: self.root.quit(); return
         if is_first_run(): self._step_wizard()
-        else: self._check_default_password()
-
-    def _check_default_password(self):
-        """Si el usuario usa la contraseña por defecto, pide que la cambie."""
-        uid = self.user_data.get('id')
-        try:
-            import sqlite3, os, sys
-            base = os.environ.get("APPDATA", os.path.expanduser("~")) if sys.platform=="win32" else os.path.expanduser("~")
-            db_path = os.path.join(base, "VenialgoPOS", "pos_database.db")
-            conn = sqlite3.connect(db_path)
-            row = conn.execute("SELECT password FROM usuarios WHERE id=?", (uid,)).fetchone()
-            conn.close()
-            if row and row[0] == DEFAULT_ADMIN_HASH:
-                self._step_force_password_change()
-                return
-        except Exception:
-            pass
-        self._step_main()
-
-    def _step_force_password_change(self):
-        """Muestra diálogo obligatorio de cambio de contraseña."""
-        win = tk.Toplevel(self.root)
-        win.withdraw()
-        try:
-            from utils.window_icon import set_icon as _si; _si(win)
-        except Exception:
-            pass
-        win.title("Cambiar contraseña — Venialgo POS")
-        win.resizable(False, False)
-        win.configure(bg="#FFFFFF")
-        win.protocol("WM_DELETE_WINDOW", lambda: None)  # No se puede cerrar
-
-        W, H = 420, 480
-        win.update_idletasks()
-        sx, sy = win.winfo_screenwidth(), win.winfo_screenheight()
-        win.geometry(f"{W}x{H}+{(sx-W)//2}+{(sy-H)//2}")
-
-        FONT = "Segoe UI"
-        BLUE  = "#1A4FCC"
-        GREEN = "#059669"
-        RED   = "#E11D48"
-
-        # Header
-        hdr = tk.Frame(win, bg="#0F2347", pady=20)
-        hdr.pack(fill='x')
-        tk.Label(hdr, text="🔐", font=(FONT,28), bg="#0F2347", fg="#FFFFFF").pack()
-        tk.Label(hdr, text="Cambio de contraseña requerido",
-                 font=(FONT,13,'bold'), bg="#0F2347", fg="#FFFFFF").pack(pady=(6,2))
-        tk.Label(hdr, text="Por seguridad, cambie la contraseña por defecto",
-                 font=(FONT,9), bg="#0F2347", fg="#8AABD4").pack()
-
-        # Aviso
-        av = tk.Frame(win, bg="#FEF3C7", pady=8, padx=16)
-        av.pack(fill='x', padx=20, pady=(14,0))
-        tk.Label(av, text="⚠  Está usando la contraseña por defecto (admin123).",
-                 font=(FONT,9), bg="#FEF3C7", fg="#92400E", anchor='w').pack(fill='x')
-
-        # Formulario
-        form = tk.Frame(win, bg="#FFFFFF", padx=28, pady=16)
-        form.pack(fill='both', expand=True)
-
-        def _field(parent, label):
-            tk.Label(parent, text=label, font=(FONT,9,'bold'),
-                     bg="#FFFFFF", fg="#374151").pack(anchor='w', pady=(10,3))
-            outer = tk.Frame(parent, bg="#D1D5DB")
-            outer.pack(fill='x')
-            inner = tk.Frame(outer, bg="#FFFFFF")
-            inner.pack(fill='x', padx=1, pady=1)
-            e = tk.Entry(inner, show="●", font=(FONT,11), bg="#FFFFFF",
-                         fg="#111827", relief='flat', bd=0)
-            e.pack(fill='x', padx=10, ipady=9)
-            e.bind('<FocusIn>',  lambda ev, o=outer: o.config(bg=BLUE))
-            e.bind('<FocusOut>', lambda ev, o=outer: o.config(bg="#D1D5DB"))
-            return e
-
-        e_new  = _field(form, "Nueva contraseña")
-        e_conf = _field(form, "Confirmar contraseña")
-
-        lbl_err = tk.Label(form, text="", font=(FONT,9), bg="#FFFFFF", fg=RED)
-        lbl_err.pack(anchor='w', pady=(6,0))
-
-        def _save():
-            nueva = e_new.get().strip()
-            conf  = e_conf.get().strip()
-            if len(nueva) < 6:
-                lbl_err.config(text="⚠  Mínimo 6 caracteres"); return
-            if nueva != conf:
-                lbl_err.config(text="⚠  Las contraseñas no coinciden"); return
-            try:
-                import sqlite3, hashlib, os, sys
-                hpwd = hashlib.sha256(nueva.encode()).hexdigest()
-                base = os.environ.get("APPDATA", os.path.expanduser("~")) if sys.platform=="win32" else os.path.expanduser("~")
-                db_path = os.path.join(base, "VenialgoPOS", "pos_database.db")
-                conn = sqlite3.connect(db_path)
-                conn.execute("UPDATE usuarios SET password=? WHERE id=?",
-                             (hpwd, self.user_data.get('id')))
-                conn.commit(); conn.close()
-                win.destroy()
-                self.root.after(100, self._step_main)
-            except Exception as ex:
-                lbl_err.config(text=f"Error: {ex}")
-
-        # Botón guardar
-        btn = tk.Label(form, text="  ✅  GUARDAR Y CONTINUAR  ",
-                       font=(FONT,11,'bold'), bg=GREEN, fg="#FFFFFF",
-                       cursor='hand2', pady=12, anchor='center')
-        btn.pack(fill='x', pady=(14,0))
-        btn.bind('<Enter>',           lambda e: btn.config(bg="#047857"))
-        btn.bind('<Leave>',           lambda e: btn.config(bg=GREEN))
-        btn.bind('<ButtonRelease-1>', lambda e: _save())
-        win.bind('<Return>', lambda e: _save())
-
-        win.deiconify()
-        win.grab_set()
+        else: self._step_main()
 
     def _step_wizard(self):
         _called = [False]

@@ -177,13 +177,15 @@ class DatabaseManager:
                 logo_path    TEXT DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS usuarios (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre    TEXT NOT NULL,
-                usuario   TEXT UNIQUE NOT NULL,
-                password  TEXT NOT NULL,
-                rol       TEXT DEFAULT 'Cajero',
-                activo    INTEGER DEFAULT 1,
-                creado_en TEXT
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre               TEXT NOT NULL,
+                usuario              TEXT UNIQUE NOT NULL,
+                password             TEXT NOT NULL,
+                rol                  TEXT DEFAULT 'Cajero',
+                activo               INTEGER DEFAULT 1,
+                creado_en            TEXT,
+                pregunta_seguridad   TEXT DEFAULT '',
+                respuesta_seguridad  TEXT DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS arqueos (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -251,6 +253,8 @@ class DatabaseManager:
             ("creditos",  "cuotas",    "INTEGER DEFAULT 1"),
             ("creditos",  "venta_id",  "INTEGER DEFAULT 0"),
             ("ventas",    "nota",      "TEXT DEFAULT ''"),
+            ("usuarios",  "pregunta_seguridad",  "TEXT DEFAULT ''"),
+            ("usuarios",  "respuesta_seguridad", "TEXT DEFAULT ''"),
         ]
         for tabla, columna, tipo in migrations:
             try:
