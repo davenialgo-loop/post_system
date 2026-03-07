@@ -276,14 +276,42 @@ class ReportsModule:
 
     def _build(self):
         bg=THEME["ct_bg"]
+
+        # ── Scroll container (para pantallas pequeñas) ─────────────
+        scroll_cv = tk.Canvas(self.parent, bg=bg, highlightthickness=0)
+        scroll_sb = ttk.Scrollbar(self.parent, orient='vertical',
+                                  command=scroll_cv.yview)
+        scroll_cv.configure(yscrollcommand=scroll_sb.set)
+        scroll_sb.pack(side='right', fill='y')
+        scroll_cv.pack(side='left', fill='both', expand=True)
+
+        page = tk.Frame(scroll_cv, bg=bg)
+        win_id = scroll_cv.create_window((0, 0), window=page, anchor='nw')
+
+        def _on_cv_resize(e):
+            scroll_cv.itemconfig(win_id, width=e.width)
+        def _on_page_resize(e):
+            scroll_cv.configure(scrollregion=scroll_cv.bbox('all'))
+        scroll_cv.bind('<Configure>', _on_cv_resize)
+        page.bind('<Configure>', _on_page_resize)
+
+        def _mwheel(e):
+            try: scroll_cv.yview_scroll(-1*(e.delta//120), 'units')
+            except Exception: pass
+        scroll_cv.bind('<Enter>', lambda e: scroll_cv.bind_all('<MouseWheel>', _mwheel))
+        scroll_cv.bind('<Leave>', lambda e: scroll_cv.unbind_all('<MouseWheel>'))
+
+        # Alias: todo el contenido va en 'page' en vez de self.parent
+        P = page
+
         # Header
-        hdr=tk.Frame(self.parent,bg=bg); hdr.pack(fill='x',padx=28,pady=(20,0))
+        hdr=tk.Frame(P,bg=bg); hdr.pack(fill='x',padx=28,pady=(20,0))
         tk.Label(hdr,text="📊  Reportes y Estadísticas",font=(FONT,16,'bold'),
                  bg=bg,fg=THEME["txt_primary"]).pack(side='left')
-        tk.Frame(self.parent,bg=THEME["card_border"],height=1).pack(fill='x',padx=28,pady=(10,14))
+        tk.Frame(P,bg=THEME["card_border"],height=1).pack(fill='x',padx=28,pady=(10,14))
 
         # Filtros rápidos
-        flt_card_outer=RoundedCard(self.parent,padx=16,pady=12)
+        flt_card_outer=RoundedCard(P,padx=16,pady=12)
         flt_card_outer.pack(fill='x',padx=24,pady=(0,14))
         flt_card=flt_card_outer.body
         tk.Label(flt_card,text="Período:",font=(FONT,10,'bold'),
@@ -314,7 +342,7 @@ class ReportsModule:
 
         # ── Sección Reporte por Rol (solo Administrador) ──────────
         if self._is_admin:
-            roles_card_outer=RoundedCard(self.parent,padx=16,pady=10)
+            roles_card_outer=RoundedCard(P,padx=16,pady=10)
             roles_card_outer.pack(fill='x',padx=24,pady=(0,14))
             roles_card=roles_card_outer.body
             # Fila superior: título + selector
@@ -359,7 +387,7 @@ class ReportsModule:
             rol_cb.bind('<<ComboboxSelected>>',_filter_users_by_rol)
 
         # Cards KPI
-        kpi_row=tk.Frame(self.parent,bg=bg); kpi_row.pack(fill='x',padx=24,pady=(0,14))
+        kpi_row=tk.Frame(P,bg=bg); kpi_row.pack(fill='x',padx=24,pady=(0,14))
         self.kpi_count  =self._stat_card(kpi_row,"Total Ventas","0",THEME["acc_blue"],"🛒")
         self.kpi_revenue=self._stat_card(kpi_row,"Ingresos Totales","Gs. 0",THEME["acc_green"],"💰")
         self.kpi_avg    =self._stat_card(kpi_row,"Ticket Promedio","Gs. 0",THEME["acc_amber"],"📈")
@@ -368,8 +396,8 @@ class ReportsModule:
             w.grid(row=0,column=i,sticky='nsew',padx=4); kpi_row.columnconfigure(i,weight=1)
 
         # Tabla ventas
-        tbl_outer=RoundedCard(self.parent,padx=0,pady=0,fill_mode=True)
-        tbl_outer.pack(fill='both',expand=True,padx=24,pady=(0,10))
+        tbl_outer=RoundedCard(P,padx=0,pady=0,fill_mode=False)
+        tbl_outer.pack(fill='x',padx=24,pady=(0,10))
         tbl=tbl_outer.body
 
         tbl_hdr=tk.Frame(tbl,bg=THEME["card_bg"],padx=16,pady=10); tbl_hdr.pack(fill='x')
@@ -383,7 +411,7 @@ class ReportsModule:
         tk.Frame(tbl,bg=THEME["card_border"],height=1).pack(fill='x')
 
         cols=('ID','Fecha','Cliente','Total','Método','Usuario','Estado')
-        self.tree=ttk.Treeview(tbl,columns=cols,show='headings',style='POS.Treeview')
+        self.tree=ttk.Treeview(tbl,columns=cols,show='headings',style='POS.Treeview',height=10)
         widths={'ID':50,'Fecha':145,'Cliente':170,'Total':110,'Método':110,'Usuario':120,'Estado':75}
         for col in cols:
             self.tree.heading(col,text=col)
@@ -397,13 +425,13 @@ class ReportsModule:
         self.tree.tag_configure('credit',foreground=THEME["acc_purple"])
 
         # ── Gráfico de ventas por día ──────────────────────────────────────────
-        chart_outer=RoundedCard(self.parent,padx=16,pady=12)
+        chart_outer=RoundedCard(P,padx=16,pady=12)
         chart_outer.pack(fill='x',padx=24,pady=(0,10))
         chart_card=chart_outer.body
         chart_hdr=tk.Frame(chart_card,bg=THEME["card_bg"]); chart_hdr.pack(fill='x',pady=(0,8))
         tk.Label(chart_hdr,text="📊  Ventas por Día",font=(FONT,11,'bold'),
                  bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(side='left')
-        self._bar_chart = BarChart(chart_card, height=175)
+        self._bar_chart = BarChart(chart_card, height=160)
         self._bar_chart.pack(fill='x', padx=4, pady=(0,4))
 
     def _quick_filter(self,period):

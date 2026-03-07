@@ -433,6 +433,13 @@ class POSApp:
         self._set_window_icon(self.root)
 
         self.db = DatabaseManager()
+        def _on_auto_backup(ok, msg):
+            try:
+                lbl_text = backup_service.last_backup_str if ok else "Error en backup"
+                self.root.after(0, lambda: self._lbl_backup.config(text=lbl_text))
+            except Exception:
+                pass
+        backup_service.on_backup = _on_auto_backup
         backup_service.start()
 
         self._setup_styles()
@@ -640,12 +647,19 @@ class POSApp:
         # Separador
         tk.Frame(sb, bg="#1E3473", height=1).pack(fill='x', padx=16, pady=8)
 
-        # Info backup
+        # ── Backup ───────────────────────────────────────────
+        # Botón backup manual
+        self._btn_backup = RoundedButton(sb, "Backup ahora", self._do_backup,
+                                         "#1A4F44", icon="💾", btn_pady=9)
+        self._btn_backup.pack(fill='x', padx=8, pady=(0, 6))
+        self._btn_backup.enable()
+
+        # Label último backup
         self._lbl_backup = tk.Label(sb,
-            text="Backup: ---",
+            text="Último: ---",
             font=(FONT, 7), bg=THEME["sb_bg"], fg=THEME["sb_text"],
             wraplength=190, justify='left', padx=20)
-        self._lbl_backup.pack(anchor='w', pady=(0, 4))
+        self._lbl_backup.pack(anchor='w', pady=(0, 8))
 
         # Botón cerrar sesión
         btn_lo = RoundedButton(sb, "Cerrar Sesión", self._logout,
@@ -1104,6 +1118,23 @@ class POSApp:
         try: backup_service.stop()
         except: pass
         self.root.destroy()
+
+    def _do_backup(self):
+        """Backup manual disparado desde el sidebar."""
+        self._btn_backup.disable()
+        self._lbl_backup.config(text="Generando backup...")
+        def _run():
+            ok, msg = backup_service.force_backup()
+            def _done():
+                if ok:
+                    self._lbl_backup.config(text=backup_service.last_backup_str)
+                    self._btn_backup.enable()
+                else:
+                    self._lbl_backup.config(text="Error en backup")
+                    self._btn_backup.enable()
+            self.root.after(0, _done)
+        import threading
+        threading.Thread(target=_run, daemon=True).start()
 
     def _logout(self):
         if messagebox.askyesno("Cerrar Sesión", "¿Desea cerrar la sesión?"):
