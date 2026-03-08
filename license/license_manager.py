@@ -51,48 +51,47 @@ DB_FILE = _get_db_file()
 # ════════════════════════════════════════════════════════════════════════════
 def get_hardware_id() -> str:
     """
-    Genera un ID único del hardware combinando:
-    - MAC address principal
-    - Nombre del equipo
-    - Plataforma / arquitectura
-    Retorna un hash SHA256 de 16 chars (suficiente para comparación).
+    Genera un ID estable para este equipo.
+    Usa un UUID persistente guardado en AppData para evitar
+    cambios por actualizaciones de drivers, VPNs o wmic deprecado.
+    Si no existe, lo genera una vez y lo guarda.
     """
-    parts = []
+    hwid_file = os.path.join(_APP_DIR, ".hwid")
 
-    # MAC address
-    try:
-        mac = uuid.getnode()
-        parts.append(str(mac))
-    except Exception:
-        parts.append("00:00:00:00:00:00")
-
-    # Hostname
-    try:
-        parts.append(platform.node())
-    except Exception:
-        parts.append("unknown")
-
-    # Plataforma
-    parts.append(platform.system())
-    parts.append(platform.machine())
-
-    # En Windows, intentar disco serial
-    if platform.system() == "Windows":
+    # Si ya existe, devolver el mismo siempre
+    if os.path.exists(hwid_file):
         try:
-            import subprocess
-            r = subprocess.check_output(
-                "wmic diskdrive get SerialNumber",
-                shell=True, stderr=subprocess.DEVNULL
-            ).decode(errors='ignore')
-            serial = r.strip().split('\n')[-1].strip()
-            if serial:
-                parts.append(serial)
+            with open(hwid_file, "r") as f:
+                stored = f.read().strip()
+            if len(stored) == 16:
+                return stored
         except Exception:
             pass
 
-    raw = "|".join(parts).encode('utf-8')
-    full_hash = hashlib.sha256(raw).hexdigest()
-    return full_hash[:16].upper()       # ID corto legible
+    # Generar nuevo HWID combinando datos del equipo
+    parts = []
+    try:
+        parts.append(str(uuid.getnode()))        # MAC address
+    except Exception:
+        parts.append("mac_unknown")
+    try:
+        parts.append(platform.node())            # hostname
+    except Exception:
+        parts.append("host_unknown")
+    parts.append(platform.system())
+    parts.append(str(uuid.uuid4()))              # salt aleatorio único
+
+    raw       = "|".join(parts).encode("utf-8")
+    hwid      = hashlib.sha256(raw).hexdigest()[:16].upper()
+
+    # Persistir para que sea siempre el mismo en este equipo
+    try:
+        with open(hwid_file, "w") as f:
+            f.write(hwid)
+    except Exception:
+        pass
+
+    return hwid
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -211,39 +210,44 @@ def validate_license(key: str = None) -> tuple[str, dict]:
     return LicenseStatus.VALID, info
 
 
-def activate_license(key: str) -> tuple[bool, str]:
+def activate_license(key: str) -> tuple:
     """
     Activa una licencia en este equipo.
-    Retorna (éxito, mensaje).
+    Solo verifica que la clave sea valida y no haya expirado.
+    El chequeo de HWID ocurre en validate_license (al iniciar),
+    no aqui — para permitir activar en cualquier equipo nuevo.
+    Retorna (exito, mensaje).
     """
-    status, info = validate_license(key)
+    # Decodificar clave directamente sin chequear activation.dat
+    info = _decode_key(key)
+    if not info:
+        return False, "Clave de licencia invalida o mal formada."
 
-    if status == LicenseStatus.INVALID_KEY:
-        return False, "❌ Clave de licencia inválida."
-    if status == LicenseStatus.EXPIRED:
-        return False, "❌ La licencia ha expirado."
-    if status == LicenseStatus.HARDWARE_MISMATCH:
-        return False, "❌ Esta licencia ya está activada en otro equipo."
-    if status == LicenseStatus.MAX_EXCEEDED:
-        return False, "❌ Se superó el límite de activaciones permitidas."
+    if time.time() > info["expiry"]:
+        return False, "La licencia ha expirado (vencio el " + info["expiry_date"] + ")."
 
-    # Guardar licencia y activación
-    with open(LICENSE_FILE, 'w') as f:
-        f.write(key.strip())
+    # Guardar licencia y registrar este equipo como activo
+    try:
+        with open(LICENSE_FILE, "w") as f:
+            f.write(key.strip())
+    except Exception as e:
+        return False, f"No se pudo guardar la licencia: {e}"
 
     hwid = get_hardware_id()
     _save_activation({
         "hwid":       hwid,
         "key":        key.strip(),
-        "client_id":  info.get("client_id"),
+        "client_id":  info.get("client_id", ""),
         "activated":  datetime.now().isoformat(),
-        "expiry":     info.get("expiry_date"),
+        "expiry":     info.get("expiry_date", ""),
     })
 
-    return True, f"✅ Licencia activada correctamente.\n" \
-                 f"Cliente: {info['client_id']}\n" \
-                 f"Válida hasta: {info['expiry_date']}\n" \
-                 f"Equipo ID: {hwid}"
+    return True, (
+        f"Licencia activada correctamente.\n"
+        f"Valida hasta: {info['expiry_date']}\n"
+        f"Dias restantes: {info['days_left']}\n"
+        f"Equipo ID: {hwid}"
+    )
 
 
 def get_license_info() -> dict:

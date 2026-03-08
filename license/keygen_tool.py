@@ -240,16 +240,20 @@ class KeygenTool:
             return
         info = _decode_key(key, _MASTER_SECRET)
         if not info:
-            messagebox.showerror("❌ Inválida", "La clave no es válida o fue alterada.")
+            messagebox.showerror("Invalida", "La clave no es valida o fue alterada.")
             return
         from datetime import datetime as dt
-        exp = dt.fromtimestamp(info['expiry']).strftime("%d/%m/%Y %H:%M")
-        msg = (f"✅ Clave válida\n\n"
-               f"Cliente:     {info['client_id']}\n"
-               f"Producto:    {info['product']}\n"
-               f"Expira:      {exp}\n"
-               f"Max activ.:  {info['max_act']}")
-        messagebox.showinfo("Verificación", msg)
+        exp_ts = info.get("expiry")
+        exp = dt.fromtimestamp(exp_ts).strftime("%d/%m/%Y %H:%M") if exp_ts else "---"
+        days_left = info.get("days_left", "?")
+        max_act   = info.get("max_act", "?")
+        # client_id en _decode_key es el hash de 4 bytes, no el texto original
+        # mostramos lo que tenemos
+        msg = (f"Clave valida\n\n"
+               f"Expira:        {exp}\n"
+               f"Dias restantes:{days_left}\n"
+               f"Max activ.:    {max_act}")
+        messagebox.showinfo("Verificacion OK", msg)
 
 
 def main():

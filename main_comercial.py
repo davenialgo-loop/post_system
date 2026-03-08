@@ -319,6 +319,9 @@ class AppStarter:
             self._step_eula()
         elif not is_licensed():
             self._step_license()
+        elif is_first_run():
+            # Primer uso: wizard ANTES del login (aun no hay usuario creado)
+            self._step_wizard()
         else:
             self._step_login()
         self.root.mainloop()
@@ -331,8 +334,12 @@ class AppStarter:
         EULAWindow(self.root, on_accept=on_accept, on_reject=on_reject)
 
     def _after_eula(self):
-        if not is_licensed(): self._step_license()
-        else: self._step_login()
+        if not is_licensed():
+            self._step_license()
+        elif is_first_run():
+            self._step_wizard()
+        else:
+            self._step_login()
 
     def _step_license(self):
         _called = [False]
@@ -342,7 +349,11 @@ class AppStarter:
             try:
                 if win.winfo_exists(): win.destroy()
             except Exception: pass
-            self.root.after(100, self._step_login)
+            # Despues de activar: wizard si es primer uso, login si ya hay usuario
+            if is_first_run():
+                self.root.after(100, self._step_wizard)
+            else:
+                self.root.after(100, self._step_login)
 
         win = tk.Toplevel(self.root)
         win.withdraw()
@@ -356,7 +367,7 @@ class AppStarter:
             if _called[0]: return
             _called[0] = True
             self.user_data = {"id": uid, "nombre": nombre, "rol": rol}
-            self.root.after(100, self._after_login)
+            self.root.after(100, self._step_main)
         def on_close():
             self.root.quit(); self.root.destroy()
 
@@ -366,12 +377,8 @@ class AppStarter:
         LoginWindow(win, on_success=on_login)
         win.deiconify()
 
-    def _after_login(self):
-        if not self.user_data: self.root.quit(); return
-        if is_first_run(): self._step_wizard()
-        else: self._step_main()
-
     def _step_wizard(self):
+        """Wizard de primer uso: crea empresa + admin. Corre ANTES del login."""
         _called = [False]
         def on_complete():
             if _called[0]: return
@@ -379,7 +386,8 @@ class AppStarter:
             try:
                 if win.winfo_exists(): win.destroy()
             except Exception: pass
-            self.root.after(100, self._step_main)
+            # Despues del wizard ir al login para que el usuario ingrese
+            self.root.after(100, self._step_login)
 
         win = tk.Toplevel(self.root)
         win.withdraw()

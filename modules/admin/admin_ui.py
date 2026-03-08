@@ -238,8 +238,26 @@ class AdminModule:
         import os, sqlite3, shutil
         from tkinter import filedialog
 
-        outer=RoundedCard(self._tab_area,padx=28,pady=24,fill_mode=True)
-        outer.pack(fill='both',expand=True)
+        # ── Scroll container para pantallas pequeñas ──────────────
+        _cv = tk.Canvas(self._tab_area, bg=THEME["ct_bg"], highlightthickness=0)
+        _sb = ttk.Scrollbar(self._tab_area, orient='vertical', command=_cv.yview)
+        _cv.configure(yscrollcommand=_sb.set)
+        _sb.pack(side='right', fill='y')
+        _cv.pack(side='left', fill='both', expand=True)
+        _page = tk.Frame(_cv, bg=THEME["ct_bg"])
+        _win_id = _cv.create_window((0,0), window=_page, anchor='nw')
+        def _on_cv_resize(e): _cv.itemconfig(_win_id, width=e.width)
+        def _on_page_resize(e): _cv.configure(scrollregion=_cv.bbox('all'))
+        _cv.bind('<Configure>', _on_cv_resize)
+        _page.bind('<Configure>', _on_page_resize)
+        def _mwheel(e):
+            try: _cv.yview_scroll(-1*(e.delta//120),'units')
+            except Exception: pass
+        _cv.bind('<Enter>', lambda e: _cv.bind_all('<MouseWheel>', _mwheel))
+        _cv.bind('<Leave>', lambda e: _cv.unbind_all('<MouseWheel>'))
+
+        outer=RoundedCard(_page,padx=28,pady=24,fill_mode=False)
+        outer.pack(fill='x',expand=False,pady=(0,16))
         card=outer.body
 
         tk.Label(card,text="Datos de la Empresa",font=(FONT,13,'bold'),
@@ -413,9 +431,27 @@ class AdminModule:
 
     # ── TAB 2: USUARIOS ───────────────────────────────────────
     def _build_usuarios_tab(self):
-        outer=tk.Frame(self._tab_area,bg=THEME["card_border"])
-        outer.pack(fill='both',expand=True)
-        card=tk.Frame(outer,bg=THEME["card_bg"]); card.pack(fill='both',expand=True,padx=1,pady=1)
+        # ── Scroll container ──────────────────────────────────────
+        _cv = tk.Canvas(self._tab_area, bg=THEME["ct_bg"], highlightthickness=0)
+        _sb = ttk.Scrollbar(self._tab_area, orient='vertical', command=_cv.yview)
+        _cv.configure(yscrollcommand=_sb.set)
+        _sb.pack(side='right', fill='y')
+        _cv.pack(side='left', fill='both', expand=True)
+        _page = tk.Frame(_cv, bg=THEME["ct_bg"])
+        _win_id = _cv.create_window((0,0), window=_page, anchor='nw')
+        def _on_cv_resize(e): _cv.itemconfig(_win_id, width=e.width)
+        def _on_page_resize(e): _cv.configure(scrollregion=_cv.bbox('all'))
+        _cv.bind('<Configure>', _on_cv_resize)
+        _page.bind('<Configure>', _on_page_resize)
+        def _mwheel(e):
+            try: _cv.yview_scroll(-1*(e.delta//120),'units')
+            except Exception: pass
+        _cv.bind('<Enter>', lambda e: _cv.bind_all('<MouseWheel>', _mwheel))
+        _cv.bind('<Leave>', lambda e: _cv.unbind_all('<MouseWheel>'))
+
+        outer=tk.Frame(_page,bg=THEME["card_border"])
+        outer.pack(fill='x',expand=False)
+        card=tk.Frame(outer,bg=THEME["card_bg"]); card.pack(fill='x',expand=False,padx=1,pady=1)
 
         tb=tk.Frame(card,bg=THEME["card_bg"],padx=16,pady=12); tb.pack(fill='x')
         tk.Label(tb,text="Gestión de Usuarios",font=(FONT,13,'bold'),
@@ -558,10 +594,28 @@ class AdminModule:
 
     # ── TAB 3: PRECIOS ────────────────────────────────────────
     def _build_precios_tab(self):
-        outer=tk.Frame(self._tab_area,bg=THEME["card_border"])
-        outer.pack(fill='both',expand=True)
+        # ── Scroll container ──────────────────────────────────────
+        _cv = tk.Canvas(self._tab_area, bg=THEME["ct_bg"], highlightthickness=0)
+        _sb = ttk.Scrollbar(self._tab_area, orient='vertical', command=_cv.yview)
+        _cv.configure(yscrollcommand=_sb.set)
+        _sb.pack(side='right', fill='y')
+        _cv.pack(side='left', fill='both', expand=True)
+        _page = tk.Frame(_cv, bg=THEME["ct_bg"])
+        _win_id = _cv.create_window((0,0), window=_page, anchor='nw')
+        def _on_cv_resize(e): _cv.itemconfig(_win_id, width=e.width)
+        def _on_page_resize(e): _cv.configure(scrollregion=_cv.bbox('all'))
+        _cv.bind('<Configure>', _on_cv_resize)
+        _page.bind('<Configure>', _on_page_resize)
+        def _mwheel(e):
+            try: _cv.yview_scroll(-1*(e.delta//120),'units')
+            except Exception: pass
+        _cv.bind('<Enter>', lambda e: _cv.bind_all('<MouseWheel>', _mwheel))
+        _cv.bind('<Leave>', lambda e: _cv.unbind_all('<MouseWheel>'))
+
+        outer=tk.Frame(_page,bg=THEME["card_border"])
+        outer.pack(fill='x',expand=False)
         card=tk.Frame(outer,bg=THEME["card_bg"],padx=28,pady=24)
-        card.pack(fill='both',expand=True,padx=1,pady=1)
+        card.pack(fill='x',expand=False,padx=1,pady=1)
         tk.Label(card,text="Configuración de Precios",font=(FONT,13,'bold'),
                  bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w',pady=(0,6))
         tk.Label(card,text="Defina los porcentajes de ganancia por modalidad de venta",
@@ -623,10 +677,28 @@ class AdminModule:
 
     # ── TAB 4: LICENCIA ───────────────────────────────────────
     def _build_licencia_tab(self):
-        outer=tk.Frame(self._tab_area,bg=THEME["card_border"])
-        outer.pack(fill='both',expand=True)
+        # ── Scroll container ──────────────────────────────────────
+        _cv = tk.Canvas(self._tab_area, bg=THEME["ct_bg"], highlightthickness=0)
+        _sb = ttk.Scrollbar(self._tab_area, orient='vertical', command=_cv.yview)
+        _cv.configure(yscrollcommand=_sb.set)
+        _sb.pack(side='right', fill='y')
+        _cv.pack(side='left', fill='both', expand=True)
+        _page = tk.Frame(_cv, bg=THEME["ct_bg"])
+        _win_id = _cv.create_window((0,0), window=_page, anchor='nw')
+        def _on_cv_resize(e): _cv.itemconfig(_win_id, width=e.width)
+        def _on_page_resize(e): _cv.configure(scrollregion=_cv.bbox('all'))
+        _cv.bind('<Configure>', _on_cv_resize)
+        _page.bind('<Configure>', _on_page_resize)
+        def _mwheel(e):
+            try: _cv.yview_scroll(-1*(e.delta//120),'units')
+            except Exception: pass
+        _cv.bind('<Enter>', lambda e: _cv.bind_all('<MouseWheel>', _mwheel))
+        _cv.bind('<Leave>', lambda e: _cv.unbind_all('<MouseWheel>'))
+
+        outer=tk.Frame(_page,bg=THEME["card_border"])
+        outer.pack(fill='x',expand=False)
         card=tk.Frame(outer,bg=THEME["card_bg"],padx=28,pady=24)
-        card.pack(fill='both',expand=True,padx=1,pady=1)
+        card.pack(fill='x',expand=False,padx=1,pady=1)
         tk.Label(card,text="Estado de Licencia",font=(FONT,13,'bold'),
                  bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w',pady=(0,16))
         tk.Frame(card,bg=THEME["card_border"],height=1).pack(fill='x',pady=(0,20))
