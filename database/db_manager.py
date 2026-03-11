@@ -211,6 +211,13 @@ class DatabaseManager:
                 porcentaje REAL DEFAULT 0,
                 activo     INTEGER DEFAULT 1
             );
+            CREATE TABLE IF NOT EXISTS producto_precios_custom (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                producto_id     INTEGER NOT NULL,
+                config_id       INTEGER NOT NULL,
+                porcentaje      REAL NOT NULL,
+                UNIQUE(producto_id, config_id)
+            );
         """)
         # Datos por defecto de config_precios
         c.execute("SELECT COUNT(*) FROM config_precios")
@@ -908,23 +915,69 @@ class DatabaseManager:
             conn.execute("UPDATE config_precios SET activo=0 WHERE id=?", (pid,))
             conn.commit()
 
-    def calcular_precios_producto(self, costo: float) -> list:
-        """Calcula precios de venta para todas las modalidades activas."""
-        configs = self.get_pricing_configs(solo_activos=True)
-        result  = []
+    def calcular_precios_producto(self, costo: float, producto_id=None) -> list:
+        """
+        Calcula precios para todas las modalidades activas.
+        Si se pasa producto_id, usa overrides personalizados para ese producto.
+        """
+        configs   = self.get_pricing_configs(solo_activos=True)
+        overrides = {}
+        if producto_id:
+            try:
+                conn = self._conn()
+                rows = conn.execute(
+                    "SELECT config_id, porcentaje FROM producto_precios_custom WHERE producto_id=?",
+                    (producto_id,)).fetchall()
+                conn.close()
+                overrides = {r["config_id"]: r["porcentaje"] for r in rows}
+            except Exception:
+                pass
+        result = []
         for c in configs:
-            precio      = round(costo * (1 + c['porcentaje'] / 100), 0)
-            cuota_monto = round(precio / c['cuotas'], 0) if c['cuotas'] > 1 else 0
+            pct         = overrides.get(c["id"], c["porcentaje"])
+            precio      = round(costo * (1 + pct / 100), 0)
+            cuota_monto = round(precio / c["cuotas"], 0) if c["cuotas"] > 1 else 0
             result.append({
-                "id":          c['id'],
-                "nombre":      c['nombre'],
-                "tipo":        c['tipo'],
-                "cuotas":      c['cuotas'],
-                "porcentaje":  c['porcentaje'],
-                "precio":      precio,
-                "cuota_monto": cuota_monto,
+                "id":            c["id"],
+                "nombre":        c["nombre"],
+                "tipo":          c["tipo"],
+                "cuotas":        c["cuotas"],
+                "porcentaje":    pct,
+                "pct_base":      c["porcentaje"],   # porcentaje global
+                "tiene_custom":  c["id"] in overrides,
+                "precio":        precio,
+                "cuota_monto":   cuota_monto,
             })
         return result
+
+    def get_custom_precios(self, producto_id: int) -> dict:
+        """Devuelve dict {config_id: porcentaje} de overrides de un producto."""
+        try:
+            conn = self._conn()
+            rows = conn.execute(
+                "SELECT config_id, porcentaje FROM producto_precios_custom WHERE producto_id=?",
+                (producto_id,)).fetchall()
+            conn.close()
+            return {r["config_id"]: r["porcentaje"] for r in rows}
+        except Exception:
+            return {}
+
+    def save_custom_precios(self, producto_id: int, overrides: dict):
+        """
+        Guarda overrides de precios para un producto.
+        overrides = {config_id: porcentaje} — solo los que difieren del global.
+        Borra los que no vienen (eliminados).
+        """
+        with self._conn() as conn:
+            conn.execute(
+                "DELETE FROM producto_precios_custom WHERE producto_id=?",
+                (producto_id,))
+            for config_id, pct in overrides.items():
+                conn.execute(
+                    """INSERT OR REPLACE INTO producto_precios_custom
+                       (producto_id, config_id, porcentaje) VALUES (?,?,?)""",
+                    (producto_id, int(config_id), float(pct)))
+            conn.commit()
     # ════════════════════════════════════════════════════════
     #  METODOS GENERICOS (execute_*)
     # ════════════════════════════════════════════════════════

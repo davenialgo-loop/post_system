@@ -344,7 +344,7 @@ class ProductModule:
         dlg=tk.Toplevel(self.parent)
         _set_icon(dlg)
         _set_icon(dlg); dlg.title(title)
-        dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,False)
+        dlg.configure(bg=THEME["ct_bg"]); dlg.resizable(False,True)
         dlg.transient(self.parent); dlg.grab_set(); _center(dlg,500,720)
 
         # Botones PRIMERO
@@ -357,13 +357,23 @@ class ProductModule:
         tk.Label(hdr,text=f"{'📦 Nuevo' if mode=='add' else '✏ Editar'} Producto",
                  font=(FONT,13,'bold'),bg=THEME["sb_bg"],fg="#fff").pack(anchor='w',padx=16)
 
-        canvas=tk.Canvas(dlg,bg=THEME["ct_bg"],highlightthickness=0)
-        canvas.pack(fill='both',expand=True)
+        scroll_frame=tk.Frame(dlg,bg=THEME["ct_bg"])
+        scroll_frame.pack(fill='both',expand=True)
+        canvas=tk.Canvas(scroll_frame,bg=THEME["ct_bg"],highlightthickness=0)
+        vsb=ttk.Scrollbar(scroll_frame,orient='vertical',command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side='right',fill='y')
+        canvas.pack(side='left',fill='both',expand=True)
         body=tk.Frame(canvas,bg=THEME["ct_bg"],padx=24,pady=16)
         canvas.create_window((0,0),window=body,anchor='nw',tags='body')
         def _rsz(e): canvas.itemconfig('body',width=e.width)
         def _srg(e): canvas.configure(scrollregion=canvas.bbox('all'))
         canvas.bind('<Configure>',_rsz); body.bind('<Configure>',_srg)
+        def _mwheel(e):
+            try: canvas.yview_scroll(-1*(e.delta//120),'units')
+            except Exception: pass
+        canvas.bind('<Enter>',lambda e: canvas.bind_all('<MouseWheel>',_mwheel))
+        canvas.bind('<Leave>',lambda e: canvas.unbind_all('<MouseWheel>'))
 
         fields={}
         def lbl_entry(key,label,required=False):
@@ -379,41 +389,176 @@ class ProductModule:
         lbl_entry('categoria','Categoría')
         lbl_entry('codigo','Código de Barras  📷  (escanear con lector)')
 
-        # Tabla de precios (calculada automáticamente)
-        prices_card=tk.Frame(body,bg=THEME["card_border"]); prices_card.pack(fill='x',pady=(4,0))
-        prices_inner=tk.Frame(prices_card,bg=THEME["card_bg"],padx=12,pady=10)
-        prices_inner.pack(fill='x',padx=1,pady=1)
-        tk.Label(prices_inner,text="Precios por modalidad (auto)",font=(FONT,9,'bold'),
-                 bg=THEME["card_bg"],fg=THEME["acc_blue"]).pack(anchor='w',pady=(0,6))
-        prices_cols=('Modalidad','Ganancia','Precio Venta','Cuota')
-        ptree=ttk.Treeview(prices_inner,columns=prices_cols,show='headings',
-                           height=4,style='POS.Treeview')
-        for col,w in zip(prices_cols,[110,70,110,90]):
-            ptree.heading(col,text=col); ptree.column(col,width=w,anchor='center')
-        ptree.pack(fill='x')
+        # ── Precios por modalidad ──────────────────────────────────
+        prices_card = tk.Frame(body, bg=THEME["card_border"])
+        prices_card.pack(fill='x', pady=(8,0))
+        prices_inner = tk.Frame(prices_card, bg=THEME["card_bg"], padx=12, pady=10)
+        prices_inner.pack(fill='x', padx=1, pady=1)
+
+        hdr_row = tk.Frame(prices_inner, bg=THEME["card_bg"])
+        hdr_row.pack(fill='x', pady=(0,6))
+        tk.Label(hdr_row, text="Precios por modalidad",
+                 font=(FONT,9,'bold'), bg=THEME["card_bg"],
+                 fg=THEME["acc_blue"]).pack(side='left')
+        tk.Label(hdr_row,
+                 text="  ✏ Editá el % para personalizar esta modalidad en este producto",
+                 font=(FONT,8), bg=THEME["card_bg"],
+                 fg=THEME["txt_secondary"]).pack(side='left')
+
+        # Cabecera de columnas
+        col_hdr = tk.Frame(prices_inner, bg=THEME["ct_bg"], pady=4)
+        col_hdr.pack(fill='x')
+        col_hdr.columnconfigure(0, weight=2)
+        col_hdr.columnconfigure(1, weight=0)
+        col_hdr.columnconfigure(2, weight=0)
+        col_hdr.columnconfigure(3, weight=0)
+        col_hdr.columnconfigure(4, weight=0)
+        for ci, (ct, an) in enumerate([
+            ("Modalidad","w"), ("Cuotas","center"),
+            ("% Global","center"), ("% Este prod.","center"), ("Precio Venta","center")
+        ]):
+            tk.Label(col_hdr, text=ct, font=(FONT,8,'bold'),
+                     bg=THEME["ct_bg"], fg=THEME["txt_secondary"],
+                     anchor=an, width=[18,6,9,11,12][ci]
+                     ).grid(row=0, column=ci, padx=4, sticky="ew")
+
+        rows_frame = tk.Frame(prices_inner, bg=THEME["card_bg"])
+        rows_frame.pack(fill='x', pady=(2,0))
+
+        # price_widgets: list of {config_id, v_pct (StringVar), chk_var, lbl_precio}
+        price_widgets = []
+
+        def _parse_costo():
+            raw = fields['costo'].get().replace(",","").replace("Gs","").strip()
+            try:    return float(raw)
+            except: return 0.0
+
+        def _build_price_rows(precios, overrides):
+            """Crea/recrea todas las filas de modalidad."""
+            for w in rows_frame.winfo_children():
+                w.destroy()
+            price_widgets.clear()
+
+            from utils.formatters import format_currency
+            for idx, p in enumerate(precios):
+                cid      = p["id"]
+                pct_base = p["pct_base"]
+                has_ov   = p["tiene_custom"]
+                bg_row   = THEME["card_bg"] if idx%2==0 else THEME["ct_bg"]
+
+                frm = tk.Frame(rows_frame, bg=bg_row, pady=3)
+                frm.pack(fill='x')
+                frm.columnconfigure(0, weight=2)
+
+                accent = THEME["acc_green"] if p["tipo"]=="contado" else THEME["acc_amber"]
+
+                # Barra lateral color
+                tk.Frame(frm, bg=accent, width=3).grid(row=0, column=0, sticky="ns", padx=(0,2))
+
+                # Nombre
+                tk.Label(frm, text=p["nombre"], font=(FONT,9), bg=bg_row,
+                         fg=THEME["txt_primary"], anchor='w', width=18
+                         ).grid(row=0, column=0, sticky="ew", padx=(6,4))
+
+                # Cuotas
+                tk.Label(frm, text=str(p["cuotas"]), font=(FONT,9),
+                         bg=bg_row, fg=THEME["txt_secondary"],
+                         anchor='center', width=6
+                         ).grid(row=0, column=1, padx=4)
+
+                # % Global (solo lectura, referencia)
+                tk.Label(frm, text=f"{pct_base:.0f}%", font=(FONT,9),
+                         bg=bg_row, fg=THEME["txt_secondary"],
+                         anchor='center', width=9
+                         ).grid(row=0, column=2, padx=4)
+
+                # % Override (editable)
+                v_pct = tk.StringVar(value=f"{p['porcentaje']:.1f}")
+                is_custom = [has_ov]  # mutable flag
+
+                pct_outer = tk.Frame(frm,
+                    bg=THEME["acc_amber"] if has_ov else THEME["card_border"],
+                    padx=2, pady=2)
+                pct_outer.grid(row=0, column=3, padx=4)
+                e_pct = tk.Entry(pct_outer, textvariable=v_pct,
+                                 font=(FONT,9,'bold'),
+                                 bg=THEME["input_bg"],
+                                 fg=THEME["acc_amber"] if has_ov else THEME["txt_secondary"],
+                                 relief='flat', bd=0, justify='center', width=8,
+                                 insertbackground=THEME["acc_amber"])
+                e_pct.pack(ipady=3, padx=2)
+
+                # Indicador visual de personalizado
+                badge_var = tk.StringVar(value="★ custom" if has_ov else "")
+                badge_lbl = tk.Label(frm, textvariable=badge_var,
+                                     font=(FONT,7), bg=bg_row,
+                                     fg=THEME["acc_amber"])
+                # (no grideamos badge, va inline junto al entry)
+
+                # Precio calculado
+                lbl_precio = tk.Label(frm,
+                    text=format_currency(p["precio"]),
+                    font=(FONT,9,'bold'), bg=bg_row,
+                    fg=accent, anchor='center', width=12)
+                lbl_precio.grid(row=0, column=4, padx=4)
+
+                # Al editar %, actualizar precio en tiempo real y marcar como custom
+                def _on_pct_change(*_, _v=v_pct, _lp=lbl_precio,
+                                   _c=p["cuotas"], _pbase=pct_base,
+                                   _outer=pct_outer, _entry=e_pct,
+                                   _is=is_custom):
+                    try:
+                        pct  = float(_v.get().replace(",","."))
+                        cost = _parse_costo()
+                        prec = round(cost * (1 + pct/100), 0)
+                        _lp.config(text=format_currency(prec))
+                        _is[0] = (abs(pct - _pbase) > 0.01)
+                        if _is[0]:
+                            _outer.config(bg=THEME["acc_amber"])
+                            _entry.config(fg=THEME["acc_amber"])
+                        else:
+                            _outer.config(bg=THEME["card_border"])
+                            _entry.config(fg=THEME["txt_secondary"])
+                    except Exception:
+                        pass
+
+                v_pct.trace_add("write", _on_pct_change)
+
+                # Botón "Reset" al % global
+                def _reset_pct(_v=v_pct, _pb=pct_base, _cb=_on_pct_change):
+                    _v.set(f"{_pb:.1f}")
+                tk.Button(frm, text="↺", font=(FONT,8),
+                          bg=bg_row, fg=THEME["txt_secondary"],
+                          relief='flat', cursor='hand2',
+                          command=_reset_pct
+                          ).grid(row=0, column=5, padx=(0,4))
+
+                sep = tk.Frame(rows_frame, bg=THEME["card_border"], height=1)
+                sep.pack(fill='x')
+
+                price_widgets.append({
+                    "config_id": cid,
+                    "v_pct":     v_pct,
+                    "pct_base":  pct_base,
+                    "is_custom": is_custom,
+                    "lbl":       lbl_precio,
+                })
+
+                # Actualizar precio contado en el campo principal
+                if p["tipo"] == "contado":
+                    fields['precio'].delete(0, 'end')
+                    fields['precio'].insert(0, str(int(p["precio"])))
 
         def update_prices(*_):
-            try:
-                costo=float(fields['costo'].get().replace(',','').replace('.','').replace('Gs','').strip() or '0')
-                if costo<=0: return
-                precios=self.db.calcular_precios_producto(costo)
-                from utils.formatters import format_currency
-                for i in ptree.get_children(): ptree.delete(i)
-                for p in precios:
-                    cuota=format_currency(p.get('cuota',0)) if p.get('cuota',0)>0 else '—'
-                    tag='cash' if p.get('tipo')=='contado' else 'credit'
-                    ptree.insert('','end',tags=(tag,),values=(
-                        p.get('nombre',''),f"{p.get('porcentaje',0):.0f}%",
-                        format_currency(p.get('precio',0)),cuota))
-                    if p.get('tipo')=='contado':
-                        fields['precio'].delete(0,'end')
-                        fields['precio'].insert(0,str(int(p.get('precio',0))))
-                ptree.tag_configure('cash',foreground=THEME["acc_green"])
-                ptree.tag_configure('credit',foreground=THEME["acc_blue"])
-            except Exception: pass
+            costo = _parse_costo()
+            if costo <= 0: return
+            pid = product_id if mode == 'edit' else None
+            precios   = self.db.calcular_precios_producto(costo, producto_id=pid)
+            overrides = self.db.get_custom_precios(pid) if pid else {}
+            _build_price_rows(precios, overrides)
 
-        fields['costo']._e.bind('<FocusOut>',update_prices)
-        fields['costo']._e.bind('<Return>',update_prices)
+        fields['costo']._e.bind('<FocusOut>', update_prices)
+        fields['costo']._e.bind('<Return>', update_prices)
 
         # Cargar datos si editar
         if mode=='edit' and product_id:
@@ -454,8 +599,25 @@ class ProductModule:
             except ValueError: messagebox.showerror("Error","Valores numéricos inválidos",parent=dlg); return
             cat=fields['categoria'].get().strip(); cod=fields['codigo'].get().strip()
             try:
-                if mode=='add': self.db.add_product(nombre,precio,stock,cat,cod,costo=costo)
-                else: self.db.update_product(product_id,nombre,precio,stock,cat,cod,costo=costo)
+                if mode=='add':
+                    pid = self.db.add_product(nombre,precio,stock,cat,cod,costo=costo)
+                else:
+                    self.db.update_product(product_id,nombre,precio,stock,cat,cod,costo=costo)
+                    pid = product_id
+
+                # Guardar porcentajes personalizados por modalidad
+                if price_widgets:
+                    custom = {}
+                    for pw in price_widgets:
+                        try:
+                            pct = float(pw["v_pct"].get().replace(",","."))
+                            if abs(pct - pw["pct_base"]) > 0.01:
+                                custom[pw["config_id"]] = pct
+                        except Exception:
+                            pass
+                    if pid:
+                        self.db.save_custom_precios(int(pid), custom)
+
                 messagebox.showinfo("✅","Producto guardado correctamente",parent=dlg)
                 self.load_products(); dlg.destroy()
             except Exception as e: messagebox.showerror("Error",str(e),parent=dlg)

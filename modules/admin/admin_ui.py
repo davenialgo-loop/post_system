@@ -592,88 +592,229 @@ class AdminModule:
         except Exception as e:
             messagebox.showerror("Error",str(e))
 
-    # ── TAB 3: PRECIOS ────────────────────────────────────────
+    # ── TAB 3: PRECIOS / CUOTAS ─────────────────────────────
     def _build_precios_tab(self):
-        # ── Scroll container ──────────────────────────────────────
+        # ── Scroll container ──────────────────────────────────
         _cv = tk.Canvas(self._tab_area, bg=THEME["ct_bg"], highlightthickness=0)
-        _sb = ttk.Scrollbar(self._tab_area, orient='vertical', command=_cv.yview)
+        _sb = ttk.Scrollbar(self._tab_area, orient="vertical", command=_cv.yview)
         _cv.configure(yscrollcommand=_sb.set)
-        _sb.pack(side='right', fill='y')
-        _cv.pack(side='left', fill='both', expand=True)
+        _sb.pack(side="right", fill="y")
+        _cv.pack(side="left", fill="both", expand=True)
         _page = tk.Frame(_cv, bg=THEME["ct_bg"])
-        _win_id = _cv.create_window((0,0), window=_page, anchor='nw')
+        _win_id = _cv.create_window((0,0), window=_page, anchor="nw")
         def _on_cv_resize(e): _cv.itemconfig(_win_id, width=e.width)
-        def _on_page_resize(e): _cv.configure(scrollregion=_cv.bbox('all'))
-        _cv.bind('<Configure>', _on_cv_resize)
-        _page.bind('<Configure>', _on_page_resize)
+        def _on_page_resize(e): _cv.configure(scrollregion=_cv.bbox("all"))
+        _cv.bind("<Configure>", _on_cv_resize)
+        _page.bind("<Configure>", _on_page_resize)
         def _mwheel(e):
-            try: _cv.yview_scroll(-1*(e.delta//120),'units')
+            try: _cv.yview_scroll(-1*(e.delta//120), "units")
             except Exception: pass
-        _cv.bind('<Enter>', lambda e: _cv.bind_all('<MouseWheel>', _mwheel))
-        _cv.bind('<Leave>', lambda e: _cv.unbind_all('<MouseWheel>'))
+        _cv.bind("<Enter>", lambda e: _cv.bind_all("<MouseWheel>", _mwheel))
+        _cv.bind("<Leave>", lambda e: _cv.unbind_all("<MouseWheel>"))
 
-        outer=tk.Frame(_page,bg=THEME["card_border"])
-        outer.pack(fill='x',expand=False)
-        card=tk.Frame(outer,bg=THEME["card_bg"],padx=28,pady=24)
-        card.pack(fill='x',expand=False,padx=1,pady=1)
-        tk.Label(card,text="Configuración de Precios",font=(FONT,13,'bold'),
-                 bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w',pady=(0,6))
-        tk.Label(card,text="Defina los porcentajes de ganancia por modalidad de venta",
-                 font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w',pady=(0,16))
-        tk.Frame(card,bg=THEME["card_border"],height=1).pack(fill='x',pady=(0,20))
+        # ── Card principal ────────────────────────────────────
+        outer = tk.Frame(_page, bg=THEME["card_border"])
+        outer.pack(fill="x", padx=0, pady=0)
+        card = tk.Frame(outer, bg=THEME["card_bg"], padx=28, pady=24)
+        card.pack(fill="x", padx=1, pady=1)
 
-        try: config=self.db.get_pricing_config()
-        except: config={}
+        tk.Label(card, text="Configuración de Precios y Cuotas",
+                 font=(FONT,13,"bold"), bg=THEME["card_bg"],
+                 fg=THEME["txt_primary"]).pack(anchor="w", pady=(0,4))
+        tk.Label(card,
+                 text="Defina el porcentaje de recargo para cada modalidad de cuotas. "
+                      "Cada fila puede tener su propio porcentaje independiente.",
+                 font=(FONT,9), bg=THEME["card_bg"],
+                 fg=THEME["txt_secondary"], wraplength=560, justify="left"
+                 ).pack(anchor="w", pady=(0,14))
+        tk.Frame(card, bg=THEME["card_border"], height=1).pack(fill="x", pady=(0,18))
 
-        fields={}
-        price_labels=[
-            ("contado_pct","Margen Contado (%)","Ganancia sobre precio costo para venta al contado",THEME["acc_green"]),
-            ("credito_pct","Margen Crédito (%)","Ganancia adicional para ventas a crédito",THEME["acc_blue"]),
-            ("cuota_pct","Recargo Cuotas (%)","Recargo por financiamiento en cuotas",THEME["acc_amber"]),
-            ("mayoreo_pct","Descuento Mayoreo (%)","Descuento para ventas al por mayor",THEME["acc_purple"]),
-        ]
-        # Grid 2 columnas para mejor uso del espacio
-        grid=tk.Frame(card,bg=THEME["card_bg"])
-        grid.pack(fill='x')
-        grid.columnconfigure(0,weight=1); grid.columnconfigure(1,weight=1)
+        # Colores por tipo
+        TYPE_COLORS = {"contado": THEME["acc_green"], "credito": THEME["acc_amber"]}
 
-        for idx,(key,lbl,desc,accent) in enumerate(price_labels):
-            gr,gc = divmod(idx,2)
-            cell=tk.Frame(grid,bg=THEME["card_bg"],padx=8,pady=6)
-            cell.grid(row=gr,column=gc,sticky='ew')
+        # ── Cabecera de tabla ─────────────────────────────────
+        hdr = tk.Frame(card, bg=THEME["ct_bg"], pady=6)
+        hdr.pack(fill="x")
+        hdr.columnconfigure(0, weight=2)
+        hdr.columnconfigure(1, weight=1)
+        hdr.columnconfigure(2, weight=1)
+        hdr.columnconfigure(3, weight=1)
+        hdr.columnconfigure(4, weight=0)
+        for col, (txt, anchor) in enumerate([
+            ("Nombre / Descripción", "w"),
+            ("Tipo", "center"),
+            ("Cuotas", "center"),
+            ("Recargo %", "center"),
+            ("", "center"),
+        ]):
+            tk.Label(hdr, text=txt, font=(FONT,9,"bold"),
+                     bg=THEME["ct_bg"], fg=THEME["txt_secondary"],
+                     anchor=anchor).grid(row=0, column=col, sticky="ew", padx=6, pady=4)
 
-            # Barra de color izquierda + label
-            header=tk.Frame(cell,bg=THEME["card_bg"])
-            header.pack(fill='x')
-            tk.Frame(header,bg=accent,width=4).pack(side='left',fill='y',padx=(0,8))
-            info=tk.Frame(header,bg=THEME["card_bg"])
-            info.pack(side='left',fill='x',expand=True)
-            tk.Label(info,text=lbl,font=(FONT,10,'bold'),
-                     bg=THEME["card_bg"],fg=THEME["txt_primary"]).pack(anchor='w')
-            tk.Label(info,text=desc,font=(FONT,8),
-                     bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
+        # ── Contenedor de filas ────────────────────────────────
+        rows_frame = tk.Frame(card, bg=THEME["card_bg"])
+        rows_frame.pack(fill="x", pady=(2,0))
 
-            # Entry debajo del label
-            e_outer=tk.Frame(cell,bg=accent,padx=2,pady=2)
-            e_outer.pack(fill='x',pady=(8,0))
-            e_inner=tk.Frame(e_outer,bg=THEME["input_bg"])
-            e_inner.pack(fill='x')
-            e=tk.Entry(e_inner,font=(FONT,12,'bold'),bg=THEME["input_bg"],
-                       fg=accent,relief='flat',bd=0,
-                       insertbackground=accent,justify='center')
-            e.pack(fill='x',ipady=8,padx=8)
-            val=config.get(key,0)
-            e.insert(0,str(val)); fields[key]=e
+        # Almacén de filas activas: lista de dicts con widgets y data
+        self._price_rows = []
 
-        def save_prices():
-            try:
-                data={k:float(fields[k].get()) for k in fields}
-                self.db.update_pricing_config(**data)
-                messagebox.showinfo("✅","Precios actualizados correctamente")
-            except ValueError: messagebox.showerror("Error","Ingrese valores numéricos válidos")
-            except Exception as e: messagebox.showerror("Error",str(e))
+        TIPO_OPTS  = ["contado", "credito"]
+        CUOTA_OPTS = [str(n) for n in [1,2,3,4,5,6,9,12,18,24,36,48]]
 
-        _btn(card,"Guardar Precios",save_prices,THEME["acc_green"],"💾").pack(anchor='w',pady=(8,0))
+        def _add_row(data=None, flash=False):
+            """Agrega una fila editable a la tabla."""
+            d = data or {"id": None, "nombre": "Nueva modalidad",
+                         "tipo": "credito", "cuotas": 1,
+                         "porcentaje": 0.0, "activo": 1}
+
+            row_bg = THEME["card_bg"]
+            accent = TYPE_COLORS.get(d.get("tipo","credito"), THEME["acc_amber"])
+
+            frm = tk.Frame(rows_frame, bg=row_bg, pady=4)
+            frm.pack(fill="x")
+            frm.columnconfigure(0, weight=2)
+            frm.columnconfigure(1, weight=1)
+            frm.columnconfigure(2, weight=1)
+            frm.columnconfigure(3, weight=1)
+            frm.columnconfigure(4, weight=0)
+
+            # Barra de color según tipo
+            bar_color = TYPE_COLORS.get(d.get("tipo","credito"), THEME["acc_amber"])
+            bar = tk.Frame(frm, bg=bar_color, width=4)
+            bar.grid(row=0, column=0, sticky="ns", padx=(0,0))
+
+            # ── Nombre ────────────────────────────────────────
+            v_nombre = tk.StringVar(value=str(d.get("nombre","")))
+            e_nombre = tk.Entry(frm, textvariable=v_nombre,
+                                font=(FONT,10), bg=THEME["input_bg"],
+                                fg=THEME["txt_primary"], relief="flat",
+                                bd=0, insertbackground=THEME["txt_primary"])
+            e_nombre.grid(row=0, column=0, sticky="ew", padx=(8,4), ipady=5)
+
+            # ── Tipo ──────────────────────────────────────────
+            v_tipo = tk.StringVar(value=str(d.get("tipo","credito")))
+            cb_tipo = ttk.Combobox(frm, textvariable=v_tipo,
+                                   values=TIPO_OPTS, state="readonly",
+                                   font=(FONT,9), width=9)
+            cb_tipo.grid(row=0, column=1, padx=4, sticky="ew", ipady=3)
+
+            def _on_tipo_change(*_, _bar=bar, _v=v_tipo):
+                c = TYPE_COLORS.get(_v.get(), THEME["acc_amber"])
+                _bar.config(bg=c)
+            v_tipo.trace_add("write", _on_tipo_change)
+
+            # ── Cuotas ────────────────────────────────────────
+            v_cuotas = tk.StringVar(value=str(d.get("cuotas",1)))
+            cb_cuotas = ttk.Combobox(frm, textvariable=v_cuotas,
+                                     values=CUOTA_OPTS, font=(FONT,9), width=7)
+            cb_cuotas.grid(row=0, column=2, padx=4, sticky="ew", ipady=3)
+
+            # ── Porcentaje ────────────────────────────────────
+            v_pct = tk.StringVar(value=str(d.get("porcentaje",0)))
+            pct_outer = tk.Frame(frm, bg=accent, padx=2, pady=2)
+            pct_outer.grid(row=0, column=3, padx=4, sticky="ew")
+            e_pct = tk.Entry(pct_outer, textvariable=v_pct,
+                             font=(FONT,11,"bold"), bg=THEME["input_bg"],
+                             fg=accent, relief="flat", bd=0,
+                             insertbackground=accent, justify="center", width=8)
+            e_pct.pack(fill="x", ipady=4)
+
+            # ── Botón eliminar ────────────────────────────────
+            row_ref = [None]   # forward reference
+            def _del_row(_r=row_ref):
+                r = _r[0]
+                if r and messagebox.askyesno("Eliminar", f"¿Eliminar '{r["v_nombre"].get()}'?"):
+                    pid = r.get("id")
+                    if pid:
+                        try: self.db.delete_pricing_config(pid)
+                        except Exception: pass
+                    r["frame"].destroy()
+                    self._price_rows.remove(r)
+
+            btn_del = tk.Button(frm, text="✕", font=(FONT,9,"bold"),
+                                bg=THEME["acc_rose"], fg="white",
+                                relief="flat", cursor="hand2", width=3,
+                                command=_del_row)
+            btn_del.grid(row=0, column=4, padx=(4,0), pady=2)
+
+            # Separador
+            sep = tk.Frame(rows_frame, bg=THEME["card_border"], height=1)
+            sep.pack(fill="x")
+
+            row_data = {
+                "id":       d.get("id"),
+                "frame":    frm,
+                "sep":      sep,
+                "v_nombre": v_nombre,
+                "v_tipo":   v_tipo,
+                "v_cuotas": v_cuotas,
+                "v_pct":    v_pct,
+            }
+            row_ref[0] = row_data
+            self._price_rows.append(row_data)
+
+            if flash:
+                frm.config(bg="#fef9c3")
+                frm.after(800, lambda: frm.config(bg=row_bg) if frm.winfo_exists() else None)
+
+        # ── Cargar datos existentes ────────────────────────────
+        try:
+            configs = self.db.get_pricing_configs(solo_activos=False)
+        except Exception:
+            configs = []
+        for c in configs:
+            _add_row(c)
+
+        # ── Botones de acción ──────────────────────────────────
+        tk.Frame(card, bg=THEME["card_border"], height=1).pack(fill="x", pady=(18,14))
+
+        action_row = tk.Frame(card, bg=THEME["card_bg"])
+        action_row.pack(anchor="w")
+
+        def _nueva_fila():
+            _add_row(flash=True)
+            # Scroll al final
+            _page.update_idletasks()
+            _cv.yview_moveto(1.0)
+
+        def _guardar_todo():
+            errores = []
+            for i, r in enumerate(self._price_rows):
+                try:
+                    nombre  = r["v_nombre"].get().strip() or f"Modalidad {i+1}"
+                    tipo    = r["v_tipo"].get().strip()
+                    cuotas  = int(r["v_cuotas"].get())
+                    pct     = float(r["v_pct"].get().replace(",","."))
+                    data    = {"nombre": nombre, "tipo": tipo,
+                               "cuotas": cuotas, "porcentaje": pct, "activo": 1}
+                    pid     = r.get("id")
+                    self.db.save_pricing_config(data, pid)
+                    if pid is None:
+                        # Obtener el id recién insertado
+                        configs_now = self.db.get_pricing_configs(solo_activos=False)
+                        if configs_now:
+                            r["id"] = configs_now[-1]["id"]
+                except Exception as ex:
+                    errores.append(f"Fila {i+1}: {ex}")
+
+            if errores:
+                messagebox.showerror("Errores al guardar", "\n".join(errores))
+            else:
+                messagebox.showinfo("✅", "Configuración de precios guardada correctamente.")
+
+        _btn(action_row, "+ Nueva cuota", _nueva_fila,
+             THEME["acc_blue"], "").pack(side="left", padx=(0,8))
+        _btn(action_row, "Guardar todo",  _guardar_todo,
+             THEME["acc_green"], "💾").pack(side="left")
+
+        # Nota informativa
+        tk.Label(card,
+                 text="💡  El porcentaje es el recargo total sobre el costo del producto.  "
+                      "Ej: 60% significa que el precio de venta = costo × 1.60",
+                 font=(FONT,8), bg=THEME["card_bg"],
+                 fg=THEME["txt_secondary"], wraplength=560, justify="left"
+                 ).pack(anchor="w", pady=(14,0))
+
 
     # ── TAB 4: LICENCIA ───────────────────────────────────────
     def _build_licencia_tab(self):

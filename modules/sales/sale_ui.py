@@ -751,49 +751,91 @@ class SalesModule:
         _btn(btn_bar,"CONFIRMAR",finalize,THEME["acc_green"],"☑", font_size=11).pack(side='left',padx=(0,4),fill='x',expand=True)
         _btn(btn_bar,"Cancelar",dlg.destroy,THEME["btn_secondary"],"✕").pack(side='left',fill='x',expand=True)
 
-    def _show_ticket(self,sale_id,total,method,paid,change,cart_items=None,cliente_nombre='Consumidor Final',referencia=''):
-        tw=tk.Toplevel(self.parent)
-        _set_icon(tw)
-        tw.title("Ticket #"+str(sale_id))
-        tw.configure(bg='white')
-        tw.transient(self.parent)
-        # NO grab_set() — causaba congelamiento al combinarse con el grab del dlg
-        tw.withdraw()  # ocultar mientras se construye
-        tw.attributes('-topmost',True)
-        tw.geometry("440x620")
+    # ════════════════════════════════════════════════════════════
+    #  DETECCIÓN DE PAPEL Y GENERACIÓN DE TICKET
+    # ════════════════════════════════════════════════════════════
 
-        # Obtener datos reales de la empresa desde la base de datos
+    # Perfiles de papel: (columnas_texto, font_size_preview, label)
+    PAPER_PROFILES = {
+        "58mm":  (32, 9,  "58 mm  (32 cols)"),
+        "80mm":  (48, 10, "80 mm  (48 cols)"),
+        "A4":    (72, 10, "A4 / Carta (72 cols)"),
+    }
+
+    # Palabras clave → perfil de papel
+    _PAPER_KEYWORDS = {
+        "58mm":  ["58mm","58 mm","rp58","jp-58","jp58","gp-58","gp58","zj58",
+                  "xp-58","xp58","pos-58","pos58","rpp02","mini"],
+        "80mm":  ["80mm","80 mm","rp80","rp-80","jp-80","jp80","gp-80","gp80",
+                  "zj-80","xp-80","xp80","pos-80","pos80","thermal","termica",
+                  "receipt","ticket","epson tm","epson t","star tsp","star mcp",
+                  "bixolon","citizen","sewoo","rongta","xprinter","gprinter",
+                  "tmt","tmu","tm-t","tm-u","tsp","rp-","pos "],
+    }
+
+    def _detect_paper_profile(self, printer_name: str) -> str:
+        """
+        Devuelve "58mm", "80mm" o "A4" según el nombre de la impresora.
+        Prioriza 58mm (más restrictivo) antes que 80mm.
+        """
+        if not printer_name:
+            return "80mm"
+        pl = printer_name.lower()
+        for profile in ("58mm", "80mm"):
+            if any(kw in pl for kw in self._PAPER_KEYWORDS[profile]):
+                return profile
+        # Intentar WMI para driver
+        try:
+            import subprocess
+            res = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 f'(Get-WmiObject Win32_Printer | Where-Object {{$_.Name -eq "{printer_name}"}}).DriverName'],
+                capture_output=True, text=True, timeout=3)
+            drv = res.stdout.strip().lower()
+            for profile in ("58mm", "80mm"):
+                if any(kw in drv for kw in self._PAPER_KEYWORDS[profile]):
+                    return profile
+        except Exception:
+            pass
+        return "80mm"  # default más común
+
+    def _build_ticket_text(self, sale_id, total, method, paid, change,
+                           cart_items, cliente_nombre, referencia, paper="80mm"):
+        """
+        Genera el texto del ticket adaptado al ancho de papel.
+        """
+        W = self.PAPER_PROFILES[paper][0]
+
         try:
             from utils.company_header import get_company
-            co=get_company()
+            co = get_company()
         except Exception:
-            co={}
+            co = {}
 
-        empresa  = co.get('razon_social') or BUSINESS.get('name','Venialgo Sistemas')
-        ruc      = co.get('ruc','')
-        telefono = co.get('telefono','')
-        direccion= co.get('direccion','')
-        ciudad   = co.get('ciudad','')
-        email    = co.get('email','')
-        web      = co.get('web','')
+        empresa   = co.get("razon_social") or BUSINESS.get("name", "Venialgo Sistemas")
+        ruc       = co.get("ruc", "")
+        telefono  = co.get("telefono", "")
+        direccion = co.get("direccion", "")
+        ciudad    = co.get("ciudad", "")
+        email     = co.get("email", "")
+        web       = co.get("web", "")
 
         from utils.formatters import format_currency
-
-        # Rollo 75mm — 44 caracteres por línea a Courier New 10pt
-        W        = 44
-        SEP      = '-' * W
-        SEP2     = '=' * W
-        now      = fecha_hora_ticket()
-
-        # Columnas: Producto 18 | Cant 4 | Precio 11 | Sub 11 = 44
-        COL_PROD = 18
-        COL_CANT =  4
-        COL_PREC = 11
-        COL_SUB  = 11
+        SEP  = "-" * W
+        SEP2 = "=" * W
+        now  = fecha_hora_ticket()
 
         def fmt_num(n):
-            try: return "{:,}".format(int(n)).replace(",",".")
+            try:    return "{:,}".format(int(n)).replace(",", ".")
             except: return str(n)
+
+        # Columnas adaptadas al ancho
+        if W <= 32:   # 58mm
+            COL_PROD, COL_CANT, COL_PREC, COL_SUB = 14, 3, 8, 7
+        elif W <= 48: # 80mm
+            COL_PROD, COL_CANT, COL_PREC, COL_SUB = 20, 4, 12, 12
+        else:         # A4
+            COL_PROD, COL_CANT, COL_PREC, COL_SUB = 34, 5, 16, 17
 
         def fmt_row(nombre, cant, precio, sub):
             n = nombre[:COL_PROD].ljust(COL_PROD)
@@ -802,53 +844,47 @@ class SalesModule:
             s = fmt_num(sub).rjust(COL_SUB)
             return n + c + p + s
 
-        def fmt_total_row(label, value):
+        def fmt_total(label, value):
             return label.rjust(W - COL_SUB) + format_currency(value).rjust(COL_SUB)
 
-        lines=[]
+        lines = []
         lines.append(SEP2)
-        lines.append(empresa.center(W))
-        if ruc:       lines.append(("RUC: " + ruc).center(W))
+        lines.append(empresa[:W].center(W))
+        if ruc:       lines.append(("RUC: " + ruc)[:W].center(W))
         if direccion: lines.append(direccion[:W].center(W))
         if ciudad:    lines.append(ciudad[:W].center(W))
-        if telefono:  lines.append(("Tel: " + telefono).center(W))
+        if telefono:  lines.append(("Tel: " + telefono)[:W].center(W))
         if email:     lines.append(email[:W].center(W))
         if web:       lines.append(web[:W].center(W))
         lines.append(SEP2)
-        lines.append(("TICKET DE VENTA #" + str(sale_id)).center(W))
+        lines.append(("TICKET #" + str(sale_id)).center(W))
         lines.append(("Fecha: " + now).center(W))
         lines.append(("Metodo: " + method).center(W))
         if referencia:
             lines.append(("Ref: " + referencia[:W-6]).center(W))
-        if cliente_nombre and cliente_nombre != "Consumidor Final":
-            lines.append(("Cliente: " + cliente_nombre[:W-9]).center(W))
-        else:
-            lines.append("Consumidor Final".center(W))
+        cln = cliente_nombre or "Consumidor Final"
+        lines.append(("Cliente: " + cln[:W-9]).center(W))
         lines.append(SEP)
 
-        # Cabecera columnas con separador visual
-        hdr = "PRODUCTO".ljust(COL_PROD) + "CANT".rjust(COL_CANT) + "PRECIO".rjust(COL_PREC) + "SUBTOTAL".rjust(COL_SUB)
+        # Cabecera columnas
+        hdr = ("PRODUCTO".ljust(COL_PROD) + "CANT".rjust(COL_CANT)
+               + "PRECIO".rjust(COL_PREC) + "SUBTOT".rjust(COL_SUB))
         lines.append(hdr)
-        # Separadores por columna
-        lines.append('-'*COL_PROD + '-'*COL_CANT + '-'*COL_PREC + '-'*COL_SUB)
+        lines.append(SEP)
 
         _items = cart_items if cart_items is not None else self.cart
         for item in _items:
-            lines.append(fmt_row(item['name'], item['quantity'],
-                                 item['unit_price'], item['subtotal']))
-            # Si el nombre es largo, segunda línea con continuación
-            if len(item['name']) > COL_PROD:
-                resto = item['name'][COL_PROD:][:COL_PROD]
-                lines.append(' ' + resto)
+            lines.append(fmt_row(item["name"], item["quantity"],
+                                 item["unit_price"], item["subtotal"]))
+            if len(item["name"]) > COL_PROD:
+                lines.append(" " + item["name"][COL_PROD:COL_PROD*2])
 
         lines.append(SEP)
-        lines.append(fmt_total_row("TOTAL:", total))
-        lines.append(fmt_total_row("Pagado:", paid))
-        chg = paid - total
-        lines.append(fmt_total_row("Cambio:", max(0, chg)))
+        lines.append(fmt_total("TOTAL:", total))
+        lines.append(fmt_total("Pagado:", paid))
+        lines.append(fmt_total("Cambio:", max(0, paid - total)))
         lines.append(SEP2)
-        lines.append("  Gracias por su compra!  ".center(W))
-        lines.append("")
+        lines.append("Gracias por su compra!".center(W))
         lines.append("")
         lines.append(SEP)
         lines.append("Venialgo Sistemas POS".center(W))
@@ -856,284 +892,303 @@ class SalesModule:
         lines.append("WhatsApp: +595 994-686 493".center(W))
         lines.append("www.venialgosistemas.com".center(W))
         lines.append(SEP2)
+        lines.append("")
+        lines.append("")
 
-        txt="\n".join(lines)
+        return "\n".join(lines)
 
-        # Detectar impresora de tickets al abrir la ventana
-        printer_name=self._detect_ticket_printer()
+    def _show_ticket(self, sale_id, total, method, paid, change,
+                     cart_items=None, cliente_nombre="Consumidor Final", referencia=""):
+        tw = tk.Toplevel(self.parent)
+        _set_icon(tw)
+        tw.title("Ticket #" + str(sale_id))
+        tw.configure(bg="white")
+        tw.transient(self.parent)
+        tw.withdraw()
+        tw.attributes("-topmost", True)
+        tw.geometry("480x680")
 
-        # Mostrar ticket
-        st=scrolledtext.ScrolledText(tw,font=('Courier New',10),bg='white',padx=16,pady=12)
-        st.pack(fill='both',expand=True,padx=12,pady=12)
-        st.insert('1.0',txt); st.config(state='disabled')
+        # Detectar impresora y perfil de papel
+        printer_name  = self._detect_ticket_printer()
+        paper_profile = self._detect_paper_profile(printer_name)
+        _, font_sz, _ = self.PAPER_PROFILES[paper_profile]
 
-        # Barra inferior con info de impresora
-        info_bar=tk.Frame(tw,bg='#F9FAFB',pady=6)
-        info_bar.pack(fill='x',padx=12)
+        # ── Texto del ticket (dinámico) ────────────────────────
+        def _make_txt(paper):
+            return self._build_ticket_text(
+                sale_id, total, method, paid, change,
+                cart_items, cliente_nombre, referencia, paper)
+
+        txt_var   = {"v": _make_txt(paper_profile)}
+        paper_var = tk.StringVar(value=paper_profile)
+
+        # ── Preview ────────────────────────────────────────────
+        import tkinter.scrolledtext as scrolledtext
+        st = scrolledtext.ScrolledText(tw, font=("Courier New", font_sz),
+                                       bg="white", padx=16, pady=12)
+        st.pack(fill="both", expand=True, padx=12, pady=12)
+        st.insert("1.0", txt_var["v"])
+        st.config(state="disabled")
+
+        def _refresh_preview(*_):
+            p   = paper_var.get()
+            _, fs, _ = self.PAPER_PROFILES[p]
+            txt_var["v"] = _make_txt(p)
+            st.config(state="normal", font=("Courier New", fs))
+            st.delete("1.0", "end")
+            st.insert("1.0", txt_var["v"])
+            st.config(state="disabled")
+
+        # ── Barra de información ───────────────────────────────
+        info_bar = tk.Frame(tw, bg="#F9FAFB", pady=6)
+        info_bar.pack(fill="x", padx=12)
+
         if printer_name:
-            tk.Label(info_bar,text=f"🖨  {printer_name}",
-                     font=('Segoe UI',8),bg='#F9FAFB',fg='#059669').pack(side='left',padx=8)
+            tk.Label(info_bar, text=f"Impresora: {printer_name}",
+                     font=("Segoe UI", 8), bg="#F9FAFB", fg="#059669").pack(side="left", padx=8)
         else:
-            tk.Label(info_bar,text="⚠  Sin impresora detectada",
-                     font=('Segoe UI',8),bg='#F9FAFB',fg='#D97706').pack(side='left',padx=8)
+            tk.Label(info_bar, text="Sin impresora detectada",
+                     font=("Segoe UI", 8), bg="#F9FAFB", fg="#D97706").pack(side="left", padx=8)
 
-        btn_row=tk.Frame(tw,bg='white'); btn_row.pack(pady=(4,12))
+        # ── Controles ──────────────────────────────────────────
+        ctrl_row = tk.Frame(tw, bg="white")
+        ctrl_row.pack(fill="x", padx=12, pady=(0, 4))
+
+        # Selector de papel
+        tk.Label(ctrl_row, text="Papel:", font=("Segoe UI", 9, "bold"),
+                 bg="white", fg="#374151").pack(side="left", padx=(0, 4))
+        paper_opts = list(self.PAPER_PROFILES.keys())
+        paper_cb = ttk.Combobox(ctrl_row, textvariable=paper_var,
+                                values=[self.PAPER_PROFILES[k][2] for k in paper_opts],
+                                state="readonly", font=("Segoe UI", 9), width=18)
+        # Mostrar label legible
+        paper_cb.set(self.PAPER_PROFILES[paper_profile][2])
+        paper_cb.pack(side="left", padx=(0, 12))
+
+        def _on_paper_change(*_):
+            # Mapear label → key
+            sel = paper_cb.get()
+            for k, (_, _, lbl) in self.PAPER_PROFILES.items():
+                if lbl == sel:
+                    paper_var.set(k)
+                    break
+            _refresh_preview()
+
+        paper_cb.bind("<<ComboboxSelected>>", _on_paper_change)
 
         # Selector de impresora
-        printers=self._get_all_printers()
-        if printers:
-            printer_var=tk.StringVar(value=printer_name or printers[0])
-            printer_cb=ttk.Combobox(btn_row,textvariable=printer_var,
-                                    values=printers,state='readonly',
-                                    font=('Segoe UI',9),width=28)
-            printer_cb.pack(side='left',padx=(0,8))
-            _btn(btn_row,"Imprimir",
-                 lambda:self._print_ticket(txt,printer_var.get()),
-                 THEME["acc_blue"],"🖨").pack(side='left',padx=(0,4))
-        else:
-            _btn(btn_row,"Imprimir",
-                 lambda:self._print_ticket(txt,None),
-                 THEME["acc_blue"],"🖨").pack(side='left',padx=(0,4))
+        btn_row = tk.Frame(tw, bg="white")
+        btn_row.pack(pady=(0, 12))
 
-        _btn(btn_row,"Cerrar",tw.destroy,THEME["btn_secondary"],"✕").pack(side='left',padx=4)
-        tw.deiconify()  # mostrar ahora que todo está construido
+        printers = self._get_all_printers()
+        if printers:
+            printer_var = tk.StringVar(value=printer_name or printers[0])
+            tk.Label(btn_row, text="Impresora:", font=("Segoe UI", 9, "bold"),
+                     bg="white", fg="#374151").pack(side="left", padx=(0, 4))
+            printer_cb = ttk.Combobox(btn_row, textvariable=printer_var,
+                                      values=printers, state="readonly",
+                                      font=("Segoe UI", 9), width=26)
+            printer_cb.pack(side="left", padx=(0, 8))
+
+            def _on_printer_change(*_):
+                # Auto-detectar perfil de papel al cambiar impresora
+                pname = printer_var.get()
+                new_profile = self._detect_paper_profile(pname)
+                paper_var.set(new_profile)
+                paper_cb.set(self.PAPER_PROFILES[new_profile][2])
+                _refresh_preview()
+
+            printer_cb.bind("<<ComboboxSelected>>", _on_printer_change)
+
+            def _do_print():
+                self._print_ticket(txt_var["v"], printer_var.get())
+
+        else:
+            def _do_print():
+                self._print_ticket(txt_var["v"], None)
+
+        _btn(btn_row, "Imprimir", _do_print,
+             THEME["acc_blue"], "").pack(side="left", padx=(0, 4))
+        _btn(btn_row, "Cerrar", tw.destroy,
+             THEME["btn_secondary"], "").pack(side="left", padx=4)
+
+        tw.deiconify()
         tw.lift()
 
-    # ── Detección de impresoras ───────────────────────────────
+    # ── Detección de impresoras ─────────────────────────────────
 
     def _get_all_printers(self):
-        """Devuelve lista de todas las impresoras instaladas en Windows."""
-        printers=[]
+        """Lista todas las impresoras instaladas."""
+        printers = []
         try:
             import winreg
-            key=winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                 r"SYSTEM\CurrentControlSet\Control\Print\Printers")
-            i=0
+            i = 0
             while True:
                 try:
-                    printers.append(winreg.EnumKey(key,i)); i+=1
-                except OSError: break
+                    printers.append(winreg.EnumKey(key, i)); i += 1
+                except OSError:
+                    break
             winreg.CloseKey(key)
         except Exception:
-            # Fallback: win32print si está disponible
             try:
                 import win32print
-                printers=[p[2] for p in win32print.EnumPrinters(
-                    win32print.PRINTER_ENUM_LOCAL|win32print.PRINTER_ENUM_CONNECTIONS)]
+                printers = [p[2] for p in win32print.EnumPrinters(
+                    win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
             except Exception:
                 pass
         return printers
 
     def _detect_ticket_printer(self):
-        """
-        Detecta automáticamente la impresora de tickets térmica.
-        Prioridad:
-          1. Impresoras con palabras clave de ticket/térmica en el nombre
-          2. Impresora predeterminada del sistema si no hay ninguna específica
-        """
-        # Palabras clave que indican impresoras de tickets
-        TICKET_KEYWORDS = [
-            'pos','receipt','ticket','thermal','termic',
-            'epson tm','star','bixolon','citizen','sewoo',
-            'xprinter','rongta','gprinter','80mm','58mm',
-            'tsp','rp-','tmt','pos-',
-        ]
-        printers=self._get_all_printers()
+        """Detecta impresora térmica por palabras clave; si no, usa la predeterminada."""
+        TICKET_KW = ["pos","receipt","ticket","thermal","termic","epson tm","star",
+                     "bixolon","citizen","sewoo","xprinter","rongta","gprinter",
+                     "80mm","58mm","tsp","rp-","tmt","pos-"]
+        printers = self._get_all_printers()
         if not printers:
             return None
-
-        # Buscar por palabras clave (case-insensitive)
         for p in printers:
-            pl=p.lower()
-            if any(kw in pl for kw in TICKET_KEYWORDS):
+            if any(kw in p.lower() for kw in TICKET_KW):
                 return p
-
-        # Si no encontró térmica, retornar la impresora predeterminada
         try:
             import winreg
-            key=winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows NT\CurrentVersion\Windows")
-            default,_=winreg.QueryValueEx(key,"Device")
+            default, _ = winreg.QueryValueEx(key, "Device")
             winreg.CloseKey(key)
-            default_name=default.split(',')[0].strip()
-            if default_name in printers:
-                return default_name
+            name = default.split(",")[0].strip()
+            if name in printers:
+                return name
         except Exception:
             pass
-
-        # Último recurso: primera impresora de la lista
         return printers[0] if printers else None
 
-    # ── Comandos ESC/POS ─────────────────────────────────────────────────────
-    ESC_INIT     = b'\x1b\x40'          # Inicializar impresora
-    ESC_FEED3    = b'\x1b\x64\x03'     # Avanzar 3 líneas
-    GS_CUT_FULL  = b'\x1d\x56\x00'    # Corte total  (GS V 0)
-    GS_CUT_PART  = b'\x1d\x56\x01'    # Corte parcial (GS V 1) — más común
-    GS_CUT_FEED  = b'\x1d\x56\x42\x05' # Corte + avance 5mm (compatibilidad amplia)
+    # ── ESC/POS ─────────────────────────────────────────────────
+    ESC_INIT    = b'\x1b\x40'
+    ESC_FEED3   = b'\x1b\x64\x03'
+    GS_CUT_FEED = b'\x1d\x56\x42\x05'
 
     def _supports_autocutter(self, printer_name):
-        """Detecta si la impresora tiene cortador automático.
-        Estrategia: nombres conocidos de térmicas + query de capacidades WMI.
-        """
         if not printer_name:
             return False
-        name_low = printer_name.lower()
-        # Marcas/modelos conocidos con cortador
-        CUTTER_KEYWORDS = [
-            'thermal','térmica','termica','receipt','ticket',
-            'pos','epson tm','epson t','citizen','star micro','star tsp',
-            'bixolon','sewoo','rongta','xprinter','xp-','80mm','58mm',
-            'tmt','tmu','tm-t','tm-u','tsp','rp80','rp58','rp-80',
-            'zj-80','zjiang','jp-58','jp-80','gainscha','gp-80','gp-58',
-        ]
-        if any(kw in name_low for kw in CUTTER_KEYWORDS):
+        pl = printer_name.lower()
+        CUTTER_KW = ["thermal","termica","receipt","ticket","pos","epson tm",
+                     "citizen","star","bixolon","sewoo","rongta","xprinter",
+                     "80mm","58mm","tmt","tmu","tm-t","tsp","rp80","rp58"]
+        if any(kw in pl for kw in CUTTER_KW):
             return True
-        # Fallback: consulta WMI por DriverName
         try:
             import subprocess
-            result = subprocess.run(
-                ['powershell','-NoProfile','-Command',
+            res = subprocess.run(
+                ["powershell","-NoProfile","-Command",
                  f'(Get-WmiObject Win32_Printer | Where-Object {{$_.Name -eq "{printer_name}"}}).DriverName'],
                 capture_output=True, text=True, timeout=3)
-            driver = result.stdout.strip().lower()
-            if any(kw in driver for kw in CUTTER_KEYWORDS):
+            drv = res.stdout.strip().lower()
+            if any(kw in drv for kw in CUTTER_KW):
                 return True
         except Exception:
             pass
         return False
 
     def _build_escpos_bytes(self, txt, printer_name):
-        """Construye los bytes ESC/POS: init + texto + avance + corte (si aplica)."""
-        safe_txt = txt.replace('₲','Gs.').replace('\u20b2','Gs.')
+        safe = txt.replace("\u20b2","Gs.").replace("₲","Gs.")
         import sys
-        text_bytes = safe_txt.encode('cp850', errors='replace') if sys.platform=='win32'                      else safe_txt.encode('utf-8', errors='replace')
-        data = self.ESC_INIT + text_bytes + self.ESC_FEED3
+        data = (self.ESC_INIT
+                + (safe.encode("cp850", errors="replace") if sys.platform=="win32"
+                   else safe.encode("utf-8", errors="replace"))
+                + self.ESC_FEED3)
         if self._supports_autocutter(printer_name):
-            data += self.GS_CUT_FEED   # corte + avance — más compatible entre marcas
+            data += self.GS_CUT_FEED
         else:
-            data += b'\n\n\n'       # solo avance de papel si no hay cortador
+            data += b"\n\n\n"
         return data
 
     def _print_ticket(self, txt, printer_name=None):
-        """Imprime el ticket directo a la impresora térmica con soporte ESC/POS y corte."""
         import sys, tempfile, subprocess
+        raw = self._build_escpos_bytes(txt, printer_name)
 
-        raw_bytes = self._build_escpos_bytes(txt, printer_name)
-
-        # ── MÉTODO 1: win32print RAW — más directo y confiable ─
-        if sys.platform == 'win32':
-            if self._print_win32(raw_bytes, printer_name):
-                return
-
-        # ── MÉTODO 2: PowerShell Out-Printer ───────────────────
-        if sys.platform == 'win32':
-            if self._print_powershell(txt, printer_name):
-                return
-
-        # ── MÉTODO 3: Notepad /p (siempre disponible en Win) ───
-        if sys.platform == 'win32':
-            if self._print_notepad(txt, printer_name):
-                return
-
-        # ── MÉTODO 4: lp (Linux/Mac) ───────────────────────────
-        if sys.platform != 'win32':
+        if sys.platform == "win32":
+            if self._print_win32(raw, printer_name):   return
+            if self._print_powershell(txt, printer_name): return
+            if self._print_notepad(txt, printer_name):    return
+        else:
             try:
-                with tempfile.NamedTemporaryFile(mode='wb', suffix='.bin', delete=False) as f:
-                    f.write(raw_bytes); path=f.name
-                cmd = ['lp', '-o', 'raw'] + (['-d', printer_name] if printer_name else []) + [path]
+                with tempfile.NamedTemporaryFile(mode="wb", suffix=".bin", delete=False) as f:
+                    f.write(raw); path = f.name
+                cmd = ["lp","-o","raw"] + (["-d", printer_name] if printer_name else []) + [path]
                 subprocess.run(cmd, check=True)
-                messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
+                messagebox.showinfo("Impreso", "Ticket enviado a la impresora")
                 return
             except Exception as e:
                 messagebox.showerror("Error", str(e))
                 return
 
         messagebox.showerror("Error al imprimir",
-            "No se pudo imprimir. Verificá que la impresora esté encendida y conectada.")
+            "No se pudo imprimir.\nVerifique que la impresora esté encendida y conectada.")
 
     def _print_win32(self, raw_bytes, printer_name=None):
-        """Impresión RAW directa con win32print. Más compatible con térmicas."""
         try:
             import win32print
             printer = printer_name or win32print.GetDefaultPrinter()
-            if not printer:
-                return False
-            handle = win32print.OpenPrinter(printer)
+            if not printer: return False
+            h = win32print.OpenPrinter(printer)
             try:
-                job = win32print.StartDocPrinter(handle, 1,
-                    ("Ticket POS", None, "RAW"))
+                win32print.StartDocPrinter(h, 1, ("Ticket POS", None, "RAW"))
                 try:
-                    win32print.StartPagePrinter(handle)
-                    win32print.WritePrinter(handle, raw_bytes)
-                    win32print.EndPagePrinter(handle)
+                    win32print.StartPagePrinter(h)
+                    win32print.WritePrinter(h, raw_bytes)
+                    win32print.EndPagePrinter(h)
                 finally:
-                    win32print.EndDocPrinter(handle)
+                    win32print.EndDocPrinter(h)
             finally:
-                win32print.ClosePrinter(handle)
-            messagebox.showinfo("✅ Impreso", f"Ticket enviado a:\n{printer}")
+                win32print.ClosePrinter(h)
+            messagebox.showinfo("Impreso", f"Ticket enviado a:\n{printer}")
             return True
         except ImportError:
-            return False   # win32print no instalado
+            return False
         except Exception as e:
             messagebox.showerror("Error win32print", str(e))
             return False
 
     def _print_powershell(self, txt, printer_name=None):
-        """Impresión via PowerShell Out-Printer."""
         import tempfile, subprocess
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
-                                             delete=False, encoding='utf-8') as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
+                                             delete=False, encoding="utf-8") as f:
                 f.write(txt); path = f.name
-
-            ps_cmd = f'Get-Content -Path "{path}" | '
+            ps = f'Get-Content -Path "{path}" | '
             if printer_name:
-                ps_cmd += f'Out-Printer -Name "{printer_name}"'
+                ps += f'Out-Printer -Name "{printer_name}"'
             else:
-                ps_cmd += 'Out-Printer'
-
-            result = subprocess.run(
-                ['powershell', '-NoProfile', '-Command', ps_cmd],
-                capture_output=True, timeout=15)
-
-            try: os.unlink(path)
-            except: pass
-
-            if result.returncode == 0:
-                messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
-                return True
-            return False
+                ps += "Out-Printer"
+            subprocess.run(["powershell","-NoProfile","-Command", ps],
+                           capture_output=True, timeout=10)
+            messagebox.showinfo("Impreso", "Ticket enviado a la impresora")
+            return True
         except Exception:
             return False
 
     def _print_notepad(self, txt, printer_name=None):
-        """Último recurso: imprimir via Notepad silencioso."""
         import tempfile, subprocess, os, time
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
-                                             delete=False, encoding='cp1252',
-                                             errors='replace') as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
+                                             delete=False, encoding="cp1252",
+                                             errors="replace") as f:
                 f.write(txt); path = f.name
-
             if printer_name:
-                # Notepad con impresora específica
-                subprocess.Popen(
-                    ['notepad.exe', '/pt', path, printer_name],
-                    creationflags=0x08000000)  # CREATE_NO_WINDOW
+                subprocess.Popen(["notepad.exe","/pt", path, printer_name],
+                                 creationflags=0x08000000)
             else:
-                subprocess.Popen(
-                    ['notepad.exe', '/p', path],
-                    creationflags=0x08000000)
-
-            # Esperar que notepad envíe el job y luego borrar el archivo
+                subprocess.Popen(["notepad.exe","/p", path],
+                                 creationflags=0x08000000)
             def _cleanup():
                 time.sleep(5)
                 try: os.unlink(path)
                 except: pass
             import threading
             threading.Thread(target=_cleanup, daemon=True).start()
-
-            messagebox.showinfo("✅ Impreso", "Ticket enviado a la impresora")
+            messagebox.showinfo("Impreso", "Ticket enviado a la impresora")
             return True
         except Exception:
             return False
