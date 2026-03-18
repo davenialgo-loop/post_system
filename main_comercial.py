@@ -92,29 +92,84 @@ def make_card(parent, padx=20, pady=16, **kw):
     return outer, outer.body
 
 
+def _hex_to_rgb(hex_color):
+    """Convierte #RRGGBB a tupla (r, g, b)."""
+    h = hex_color.lstrip('#')
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def _rgb_to_hex(r, g, b):
+    return f'#{int(r):02x}{int(g):02x}{int(b):02x}'
+
+def _darken(hex_color, factor=0.55):
+    """Oscurece un color multiplicando por factor."""
+    r, g, b = _hex_to_rgb(hex_color)
+    return _rgb_to_hex(r*factor, g*factor, b*factor)
+
 def stat_card(parent, title, value, accent, icon=""):
-    """Card de estadística con ícono, título y valor."""
-    outer = RoundedCard(parent, padx=20, pady=18)
-    inner = outer.body
+    """Card con degradado redondeado y texto dibujado directo en el canvas."""
+    CARD_H = 118
+    R      = 14   # radio de esquinas
 
-    # Ícono + título en la misma fila
-    top = tk.Frame(inner, bg=THEME["card_bg"])
-    top.pack(fill='x')
-    tk.Label(top, text=icon, font=(FONT, 14),
-             bg=THEME["card_bg"], fg=accent).pack(side='left')
-    tk.Label(top, text=f"  {title}",
-             font=(FONT, 9),
-             bg=THEME["card_bg"], fg=THEME["txt_secondary"]).pack(side='left')
+    color_end  = _darken(accent, 0.62)
+    r1, g1, b1 = _hex_to_rgb(accent)
+    r2, g2, b2 = _hex_to_rgb(color_end)
 
-    # Valor destacado
-    tk.Label(inner, text=value,
-             font=(FONT, 22, 'bold'),
-             bg=THEME["card_bg"], fg=THEME["txt_primary"]).pack(anchor='w', pady=(8, 0))
+    cv = tk.Canvas(parent, height=CARD_H, highlightthickness=0,
+                   bd=0, relief='flat', bg=THEME["ct_bg"])
 
-    # Barra de color inferior
-    tk.Frame(inner, bg=accent, height=3).pack(fill='x', pady=(12, 0))
+    def _redraw(event=None):
+        cv.delete('all')
+        w = cv.winfo_width() or 240
+        h = CARD_H
 
-    return outer
+        # ── Gradiente con esquinas redondeadas ────────────────
+        for i in range(w):
+            t  = i / max(w - 1, 1)
+            rr = int(r1 + (r2 - r1) * t)
+            gg = int(g1 + (g2 - g1) * t)
+            bb = int(b1 + (b2 - b1) * t)
+            col = _rgb_to_hex(rr, gg, bb)
+            y0, y1 = 0, h
+            # esquina sup izq
+            if i < R:
+                dx = R - i
+                y0 = max(y0, int(R - (R*R - dx*dx)**0.5))
+            # esquina sup der
+            if i > w - R - 1:
+                dx = i - (w - R - 1)
+                y0 = max(y0, int(R - (R*R - dx*dx)**0.5))
+            # esquina inf izq
+            if i < R:
+                dx = R - i
+                y1 = min(y1, h - int(R - (R*R - dx*dx)**0.5))
+            # esquina inf der
+            if i > w - R - 1:
+                dx = i - (w - R - 1)
+                y1 = min(y1, h - int(R - (R*R - dx*dx)**0.5))
+            if y1 > y0:
+                cv.create_line(i, y0, i, y1, fill=col)
+
+        # ── Texto directo en canvas (siempre visible) ─────────
+        px = R + 10  # margen izquierdo
+
+        # Ícono
+        cv.create_text(px, 22, text=icon,
+                       font=(FONT, 20), fill="white", anchor="w")
+
+        # Título (a la derecha del ícono, baseline alineada)
+        cv.create_text(px + 36, 26, text=title,
+                       font=(FONT, 9, "bold"), fill="#dbeafe", anchor="w")
+
+        # Valor grande
+        cv.create_text(px, 72, text=str(value),
+                       font=(FONT, 22, "bold"), fill="white", anchor="w")
+
+        # Línea decorativa inferior
+        cv.create_line(px, CARD_H - 10, w - px, CARD_H - 10,
+                       fill="#ffffff", width=2)
+
+    cv.bind("<Configure>", _redraw)
+    return cv
 
 
 class SidebarButton(tk.Frame):
@@ -834,8 +889,8 @@ class POSApp:
 
         for i, (title, val, accent, icon) in enumerate(cards_data):
             card = stat_card(cards_row, title, val, accent, icon)
-            card.grid(row=0, column=i, sticky='nsew', padx=4, pady=4)
-            cards_row.columnconfigure(i, weight=1)
+            card.grid(row=0, column=i, sticky='nsew', padx=6, pady=4)
+            cards_row.columnconfigure(i, weight=1, minsize=160)
 
 
 

@@ -181,16 +181,60 @@ class CreditsModule:
         _setup_styles()
         self._build(); self.load_credits()
 
+    @staticmethod
+    def _hex_to_rgb(h):
+        h=h.lstrip('#'); return tuple(int(h[i:i+2],16) for i in (0,2,4))
+    @staticmethod
+    def _rgb_to_hex(r,g,b): return f'#{int(r):02x}{int(g):02x}{int(b):02x}'
+    @staticmethod
+    def _darken(hex_color,f=0.62):
+        r,g,b=CreditsModule._hex_to_rgb(hex_color); return CreditsModule._rgb_to_hex(r*f,g*f,b*f)
+
     def _stat_card(self,parent,title,value,accent):
-        outer=RoundedCard(parent,padx=16,pady=14)
-        inner=outer.body
-        tk.Label(inner,text=title,font=(FONT,9),bg=THEME["card_bg"],fg=THEME["txt_secondary"]).pack(anchor='w')
-        lbl=tk.Label(inner,text=value,font=(FONT,18,'bold'),bg=THEME["card_bg"],fg=accent)
-        lbl.pack(anchor='w',pady=(4,0))
-        tk.Frame(inner,bg=accent,height=3).pack(fill='x',pady=(10,0))
-        inner.value_label=lbl
-        outer.value_label=lbl
-        return outer
+        """Card degradada con esquinas redondeadas. Expone value_label compatible."""
+        CARD_H=110; R=14
+        r1,g1,b1=self._hex_to_rgb(accent)
+        col_end=self._darken(accent)
+        r2,g2,b2=self._hex_to_rgb(col_end)
+
+        cv=tk.Canvas(parent,height=CARD_H,highlightthickness=0,bd=0,
+                     relief='flat',bg=THEME["ct_bg"])
+
+        val_ref=[str(value)]
+
+        def _redraw(event=None):
+            cv.delete('all')
+            w=cv.winfo_width() or 220
+            h=CARD_H
+            for i in range(w):
+                t=i/max(w-1,1)
+                rr=int(r1+(r2-r1)*t); gg=int(g1+(g2-g1)*t); bb=int(b1+(b2-b1)*t)
+                col=self._rgb_to_hex(rr,gg,bb)
+                y0,y1=0,h
+                if i<R:
+                    dx=R-i; dy=int(R-(R*R-dx*dx)**0.5)
+                    y0=max(y0,dy); y1=min(y1,h-dy)
+                if i>w-R-1:
+                    dx=i-(w-R-1); dy=int(R-(R*R-dx*dx)**0.5)
+                    y0=max(y0,dy); y1=min(y1,h-dy)
+                if y1>y0: cv.create_line(i,y0,i,y1,fill=col)
+            px=R+10
+            cv.create_text(px,20,text=title,font=(FONT,8,'bold'),fill="#dbeafe",anchor="w")
+            cv.create_text(px,68,text=val_ref[0],font=(FONT,18,'bold'),fill="white",anchor="w")
+            cv.create_line(px,CARD_H-8,w-px,CARD_H-8,fill="#ffffff",width=2)
+
+        class _ValueProxy:
+            def __init__(self,ref,canvas,redraw_fn):
+                self._ref=ref; self._cv=canvas; self._rd=redraw_fn
+            def config(self,text=None,**kw):
+                if text is not None:
+                    self._ref[0]=str(text)
+                    self._rd()
+
+        cv.value_label=_ValueProxy(val_ref,cv,_redraw)
+        cv.bind('<Configure>',_redraw)
+        return cv
+
 
     def _build(self):
         bg=THEME["ct_bg"]
